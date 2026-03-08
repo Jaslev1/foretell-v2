@@ -1,6 +1,7 @@
 // ── KALSHI API CLIENT ──────────────────────────────────────────────
 // Public endpoint — no auth required
-const BASE = 'https://api.elections.kalshi.com/trade-api/v2'
+// Route through our Vercel proxy to avoid CORS
+const PROXY = '/api/markets'
 
 export interface KalshiMarket {
   ticker: string
@@ -43,9 +44,8 @@ export async function fetchOpenMarkets(pages = 5): Promise<KalshiMarket[]> {
   let cursor = ''
 
   for (let i = 0; i < pages; i++) {
-    const url = new URL(`${BASE}/markets`)
+    const url = new URL(PROXY, window.location.origin)
     url.searchParams.set('limit', '1000')
-    url.searchParams.set('status', 'open')
     if (cursor) url.searchParams.set('cursor', cursor)
 
     const res = await fetch(url.toString())
