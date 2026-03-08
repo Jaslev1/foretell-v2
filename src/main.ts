@@ -125,7 +125,7 @@ function renderEmpty(): string {
   <div class="error-state">
     <div class="error-icon">◎</div>
     <h3>No opportunities found</h3>
-    <p>No open markets currently match the high-confidence criteria. Check back later.</p>
+    <p>Loading live data… if this persists, check /api/debug for raw market data.</p>
   </div>`
 }
 
@@ -212,7 +212,7 @@ async function loadOpportunities() {
     updateCategoryTabs(opps)
     updateGrid()
 
-    if (status) status.textContent = `${markets.length} markets scanned`
+    if (status) status.textContent = `${markets.length} scanned · ${opps.length} opportunities found`
 
   } catch (err: any) {
     grid.innerHTML = renderError(err?.message || 'Unknown error')

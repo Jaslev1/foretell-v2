@@ -1,6 +1,4 @@
 // ── KALSHI API CLIENT ──────────────────────────────────────────────
-// Public endpoint — no auth required
-// Route through our Vercel proxy to avoid CORS
 const PROXY = '/api/markets'
 
 export interface KalshiMarket {
@@ -9,36 +7,46 @@ export interface KalshiMarket {
   title: string
   subtitle: string
   status: string
-  yes_bid: number       // cents
-  yes_ask: number       // cents
-  no_bid: number        // cents
-  no_ask: number        // cents
-  last_price: number    // cents
+  yes_bid: number
+  yes_ask: number
+  no_bid: number
+  no_ask: number
+  yes_bid_dollars: string
+  yes_ask_dollars: string
+  no_bid_dollars: string
+  no_ask_dollars: string
+  last_price: number
   volume: number
   volume_24h: number
   open_interest: number
   close_time: string
   expiration_time: string
   result: string
-  yes_bid_dollars: string
-  no_bid_dollars: string
 }
 
 export interface ScoredOpportunity {
   market: KalshiMarket
   side: 'YES' | 'NO'
-  entryPrice: number      // cents — what you pay
-  payoutIfWin: number     // cents — what you get back (always 100)
+  entryPrice: number      // cents
   potentialReturn: number // % return if win
-  impliedProb: number     // market's implied probability of winning
-  edgeScore: number       // our composite score (higher = better opp)
-  spread: number          // bid-ask spread in cents
+  impliedProb: number     // 0–1
+  edgeScore: number
+  spread: number          // cents
   daysToClose: number
   category: string
   rationale: string
 }
 
-// Fetch up to `pages` pages of open markets (1000 per page)
+// Normalise price to cents regardless of which field Kalshi populates
+function toCents(intField: number, dollarField: string): number {
+  if (intField && intField > 0) return intField
+  if (dollarField) {
+    const parsed = parseFloat(dollarField) * 100
+    if (!isNaN(parsed) && parsed > 0) return Math.round(parsed)
+  }
+  return 0
+}
+
 export async function fetchOpenMarkets(pages = 5): Promise<KalshiMarket[]> {
   const markets: KalshiMarket[] = []
   let cursor = ''
@@ -49,8 +57,9 @@ export async function fetchOpenMarkets(pages = 5): Promise<KalshiMarket[]> {
     if (cursor) url.searchParams.set('cursor', cursor)
 
     const res = await fetch(url.toString())
-    if (!res.ok) throw new Error(`Kalshi API error: ${res.status}`)
+    if (!res.ok) throw new Error(`Proxy error: ${res.status}`)
     const data = await res.json()
+    if (data.error) throw new Error(data.error)
 
     markets.push(...(data.markets || []))
     cursor = data.cursor || ''
@@ -61,59 +70,26 @@ export async function fetchOpenMarkets(pages = 5): Promise<KalshiMarket[]> {
 }
 
 // ── SCORING ENGINE ──────────────────────────────────────────────────
-//
-// Strategy: find markets where:
-//   1. Price is HIGH (70–95¢) → smaller payout but high win probability
-//   2. Spread is TIGHT → liquid, fair market
-//   3. Volume is decent → not illiquid
-//   4. Time to close is SHORT → faster resolution
-//   5. Return per $ risked is still reasonable
-//
-// Score formula (0–100):
-//   - Probability score:  normalised implied prob in 70–97% band   (35pts)
-//   - Return score:       return % normalised against peers         (25pts)
-//   - Liquidity score:    24h volume rank                           (20pts)
-//   - Spread score:       tight spread = better                     (10pts)
-//   - Horizon score:      closes sooner = better                    (10pts)
-
 function daysUntil(isoDate: string): number {
   if (!isoDate) return 999
   const ms = new Date(isoDate).getTime() - Date.now()
-  return Math.max(0, ms / (1000 * 60 * 60 * 24))
+  return Math.max(0, ms / 86400000)
 }
 
 function inferCategory(ticker: string, title: string): string {
   const t = (ticker + ' ' + title).toLowerCase()
-  if (t.includes('fed') || t.includes('rate') || t.includes('cpi') || t.includes('gdp') || t.includes('inflation') || t.includes('fomc')) return 'Economics'
-  if (t.includes('btc') || t.includes('eth') || t.includes('crypto') || t.includes('bitcoin')) return 'Crypto'
-  if (t.includes('weather') || t.includes('temp') || t.includes('snow') || t.includes('rain') || t.includes('hurricane')) return 'Weather'
-  if (t.includes('nba') || t.includes('nfl') || t.includes('mlb') || t.includes('nhl') || t.includes('sport') || t.includes('game')) return 'Sports'
-  if (t.includes('trump') || t.includes('biden') || t.includes('congress') || t.includes('senate') || t.includes('election') || t.includes('president')) return 'Politics'
-  if (t.includes('apple') || t.includes('tesla') || t.includes('nvidia') || t.includes('tech') || t.includes('stock') || t.includes('nasdaq') || t.includes('s&p') || t.includes('dow')) return 'Markets'
-  if (t.includes('movie') || t.includes('oscar') || t.includes('grammy') || t.includes('emmy') || t.includes('box office')) return 'Entertainment'
+  if (/fed|fomc|cpi|gdp|inflation|unemploy|jobs|rate\s|interest/.test(t)) return 'Economics'
+  if (/btc|eth|crypto|bitcoin|solana|doge/.test(t)) return 'Crypto'
+  if (/weather|temp|snow|rain|hurricane|tornado|degrees/.test(t)) return 'Weather'
+  if (/nba|nfl|mlb|nhl|ncaa|sport|basketball|football|baseball|hockey|soccer|mls|ufc|tennis/.test(t)) return 'Sports'
+  if (/trump|biden|harris|congress|senate|house|election|president|republican|democrat|political/.test(t)) return 'Politics'
+  if (/s&p|nasdaq|dow|stock|equity|market|spy|qqq|nyse|russell/.test(t)) return 'Markets'
+  if (/oil|gas|gold|silver|commodit|energy|wti|brent/.test(t)) return 'Commodities'
+  if (/movie|oscar|grammy|emmy|award|box office|tv show|netflix/.test(t)) return 'Entertainment'
   return 'General'
 }
 
-function buildRationale(side: 'YES' | 'NO', impliedProb: number, potentialReturn: number, daysToClose: number, spread: number): string {
-  const prob = Math.round(impliedProb * 100)
-  const ret = potentialReturn.toFixed(1)
-  const horizon = daysToClose < 1 ? 'today' : daysToClose < 7 ? `${Math.round(daysToClose)}d` : `${Math.round(daysToClose / 7)}wk`
-  const liquidity = spread <= 2 ? 'tight spread' : spread <= 5 ? 'moderate spread' : 'wider spread'
-  return `${prob}% implied win · ${ret}% return · resolves ${horizon} · ${liquidity}`
-}
-
 export function scoreMarkets(markets: KalshiMarket[]): ScoredOpportunity[] {
-  // Pre-filter: must have real pricing and volume
-  const valid = markets.filter(m =>
-    m.yes_bid > 0 &&
-    m.yes_ask > 0 &&
-    m.no_bid > 0 &&
-    m.no_ask > 0 &&
-    m.volume_24h > 0 &&
-    m.status === 'open'
-  )
-
-  // Build raw opportunities for both YES and NO sides
   const raw: Array<{
     market: KalshiMarket
     side: 'YES' | 'NO'
@@ -124,83 +100,100 @@ export function scoreMarkets(markets: KalshiMarket[]): ScoredOpportunity[] {
     daysToClose: number
   }> = []
 
-  for (const m of valid) {
+  for (const m of markets) {
+    if (m.status !== 'open') continue
+
+    // Normalise all prices to cents
+    const yesBid = toCents(m.yes_bid, m.yes_bid_dollars)
+    const yesAsk = toCents(m.yes_ask, m.yes_ask_dollars)
+    const noBid  = toCents(m.no_bid,  m.no_bid_dollars)
+    const noAsk  = toCents(m.no_ask,  m.no_ask_dollars)
+
+    // Need at least one side to have a tradeable ask price
+    if (yesAsk <= 0 && noAsk <= 0) continue
+
     const days = daysUntil(m.close_time || m.expiration_time)
 
-    // YES side: buy at yes_ask, win 100¢
-    const yesEntry = m.yes_ask
-    const yesImplied = yesEntry / 100
-    const yesReturn = (100 - yesEntry) / yesEntry * 100
-    const yesSpread = m.yes_ask - m.yes_bid
-
-    // NO side: buy at no_ask, win 100¢
-    const noEntry = m.no_ask
-    const noImplied = noEntry / 100
-    const noReturn = (100 - noEntry) / noEntry * 100
-    const noSpread = m.no_ask - m.no_bid
-
-    // Only consider high-probability side (60–97¢ entry = 60–97% win prob)
-    // This is the "predictable, smaller payout" brief
-    if (yesEntry >= 60 && yesEntry <= 97) {
-      raw.push({ market: m, side: 'YES', entryPrice: yesEntry, impliedProb: yesImplied, potentialReturn: yesReturn, spread: yesSpread, daysToClose: days })
+    // YES side
+    if (yesAsk >= 55 && yesAsk <= 98) {
+      raw.push({
+        market: m, side: 'YES',
+        entryPrice: yesAsk,
+        impliedProb: yesAsk / 100,
+        potentialReturn: (100 - yesAsk) / yesAsk * 100,
+        spread: yesAsk - yesBid,
+        daysToClose: days,
+      })
     }
-    if (noEntry >= 60 && noEntry <= 97) {
-      raw.push({ market: m, side: 'NO', entryPrice: noEntry, impliedProb: noImplied, potentialReturn: noReturn, spread: noSpread, daysToClose: days })
+
+    // NO side
+    if (noAsk >= 55 && noAsk <= 98) {
+      raw.push({
+        market: m, side: 'NO',
+        entryPrice: noAsk,
+        impliedProb: noAsk / 100,
+        potentialReturn: (100 - noAsk) / noAsk * 100,
+        spread: noAsk - noBid,
+        daysToClose: days,
+      })
     }
   }
 
   if (raw.length === 0) return []
 
-  // Normalise volume for liquidity scoring
-  const maxVol = Math.max(...raw.map(r => r.market.volume_24h))
-  const maxDays = Math.max(...raw.map(r => r.daysToClose), 1)
+  // Normalise volume
+  const maxVol = Math.max(...raw.map(r => r.market.volume_24h || r.market.volume || 1), 1)
 
-  // Score each
   const scored: ScoredOpportunity[] = raw.map(r => {
-    // 1. Probability score (35pts) — sweet spot is 75–92% implied
-    const probPct = r.impliedProb * 100
-    const probScore = probPct >= 75 && probPct <= 92
-      ? 35
-      : probPct >= 65
-        ? 25
-        : 15
+    const prob = r.impliedProb * 100
 
-    // 2. Return score (25pts) — higher return within the high-prob band is better
-    const returnScore = Math.min(25, r.potentialReturn * 2.5)
+    // 1. Probability score (35pts) — sweet spot 72–93%
+    const probScore = prob >= 72 && prob <= 93 ? 35
+      : prob >= 60 ? 22 : 10
 
-    // 3. Liquidity score (20pts)
-    const liquidityScore = (r.market.volume_24h / maxVol) * 20
+    // 2. Return score (25pts)
+    const returnScore = Math.min(25, r.potentialReturn * 3)
 
-    // 4. Spread score (10pts) — tighter is better
-    const spreadScore = r.spread <= 1 ? 10 : r.spread <= 3 ? 7 : r.spread <= 5 ? 4 : 1
+    // 3. Liquidity (20pts)
+    const vol = r.market.volume_24h || r.market.volume || 0
+    const liquidityScore = (vol / maxVol) * 20
 
-    // 5. Horizon score (10pts) — shorter is better (resolves soon)
-    const horizonScore = r.daysToClose === 0 ? 10
+    // 4. Spread (10pts)
+    const spreadScore = r.spread <= 1 ? 10 : r.spread <= 3 ? 7 : r.spread <= 6 ? 4 : 1
+
+    // 5. Horizon (10pts) — sooner is better
+    const horizonScore = r.daysToClose <= 0.5 ? 10
       : r.daysToClose <= 1 ? 9
       : r.daysToClose <= 7 ? 7
-      : r.daysToClose <= 30 ? 4
-      : 1
+      : r.daysToClose <= 30 ? 4 : 1
 
     const edgeScore = probScore + returnScore + liquidityScore + spreadScore + horizonScore
+
+    const horizon = r.daysToClose < 1 ? 'today'
+      : r.daysToClose < 2 ? 'tomorrow'
+      : r.daysToClose < 7 ? `${Math.round(r.daysToClose)}d`
+      : `${Math.round(r.daysToClose / 7)}wk`
+
+    const liq = r.spread <= 2 ? 'tight spread' : r.spread <= 5 ? 'moderate spread' : 'wide spread'
+    const rationale = `${Math.round(prob)}% implied win · +${r.potentialReturn.toFixed(1)}% return · closes ${horizon} · ${liq}`
 
     return {
       market: r.market,
       side: r.side,
       entryPrice: r.entryPrice,
-      payoutIfWin: 100,
       potentialReturn: r.potentialReturn,
       impliedProb: r.impliedProb,
       edgeScore,
       spread: r.spread,
       daysToClose: r.daysToClose,
       category: inferCategory(r.market.ticker, r.market.title),
-      rationale: buildRationale(r.side, r.impliedProb, r.potentialReturn, r.daysToClose, r.spread),
+      rationale,
     }
   })
 
-  // Sort by score, deduplicate (pick best side per market), take top 20
   scored.sort((a, b) => b.edgeScore - a.edgeScore)
 
+  // Deduplicate — best side per market ticker
   const seen = new Set<string>()
   const top: ScoredOpportunity[] = []
   for (const s of scored) {
