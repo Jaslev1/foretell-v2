@@ -42,6 +42,9 @@ function formatClose(days: number): string {
 function renderCard(opp: ScoredOpportunity, rank: number): string {
   const col = categoryColor(opp.category)
   const winProb = Math.round(opp.impliedProb * 100)
+  const ev = opp.expectedValue
+  const evColor = ev > 0 ? "var(--green)" : "var(--red)"
+  const evDisplay = (ev > 0 ? "+" : "") + ev.toFixed(1) + "¢"
   const ret = opp.potentialReturn.toFixed(1)
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
@@ -67,7 +70,7 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
           <span class="metric-value">$${entryDollars}</span>
         </div>
         <div class="metric">
-          <span class="metric-label">Win Prob</span>
+          <span class="metric-label">Implied</span>
           <span class="metric-value" style="color:${col};">${winProb}%</span>
         </div>
         <div class="metric">
@@ -75,8 +78,8 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
           <span class="metric-value return-val">+${ret}%</span>
         </div>
         <div class="metric">
-          <span class="metric-label">Spread</span>
-          <span class="metric-value">${opp.spread}¢</span>
+          <span class="metric-label">Exp. Value</span>
+          <span class="metric-value" style="color:${evColor};">${evDisplay}</span>
         </div>
         <div class="metric">
           <span class="metric-label">Vol 24h</span>
