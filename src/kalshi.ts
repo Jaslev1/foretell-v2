@@ -127,7 +127,7 @@ export function scoreMarkets(markets: KalshiMarket[]): ScoredOpportunity[] {
   }> = []
 
   for (const m of markets) {
-    if (m.status !== 'open') continue
+    if (m.status !== 'open' && m.status !== 'active') continue
 
     const yesBid = toCents(m.yes_bid, m.yes_bid_dollars)
     const yesAsk = toCents(m.yes_ask, m.yes_ask_dollars)

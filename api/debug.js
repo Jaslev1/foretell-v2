@@ -5,7 +5,8 @@ export default async function handler(req, res) {
   try {
     const url = new URL('https://api.elections.kalshi.com/trade-api/v2/markets')
     url.searchParams.set('limit', '10')
-    url.searchParams.set('status', 'open')
+    url.searchParams.set('status', 'active')
+    url.searchParams.set('mve_filter', 'exclude')
 
     const upstream = await fetch(url.toString(), {
       headers: { 'Accept': 'application/json', 'User-Agent': 'Foretell/1.0' }
