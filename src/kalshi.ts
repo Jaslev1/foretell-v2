@@ -88,6 +88,7 @@ function detectCategory(ticker: string, eventTicker: string, title: string): str
     combined.includes('KXGOVERNORMENTION')
 
   const isSoccer =
+    combined.includes('ARGPREMDIV') || combined.includes('BRAZSER') || combined.includes('MEXLIGA') ||
     combined.includes('EPL') || combined.includes('BUNDESLIGA') || combined.includes('LALIGA') ||
     combined.includes('SERIEA') || combined.includes('LIGUE1') || combined.includes('FACUP') ||
     combined.includes('CHAMPIONSLEAGUE') || combined.includes('UCL') || combined.includes('UEL') ||
@@ -110,7 +111,7 @@ function detectCategory(ticker: string, eventTicker: string, title: string): str
   }
 
   // ── CATEGORISE ──
-  if (combined.includes('ATP') || combined.includes('WTA') || combined.includes('ATPMATCH') ||
+  if (combined.includes('KXWBC') || combined.includes('ATP') || combined.includes('WTA') || combined.includes('ATPMATCH') ||
       combined.includes('WTAMATCH') || combined.includes('ATPCHAL') || combined.includes('WTACHAL') ||
       combined.includes('DPLWTOUR') || combined.includes('LOLGAME') || combined.includes('CS2GAME') ||
       combined.includes('VALORANT') || combined.includes('NBAGAME') || combined.includes('NBAMENT') ||
