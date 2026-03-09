@@ -1,41 +1,47 @@
 import './style.css'
-import { fetchOpenMarkets, scoreMarkets, type ScoredOpportunity } from './kalshi.ts'
 
-// ── CATEGORY COLOURS — P&P palette ──────────────────────────────────
-const CATEGORY_COLORS: Record<string, { text: string; bg: string; border: string }> = {
-  Tennis:        { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
-  NCAA:          { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
-  NBA:           { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
-  NFL:           { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
-  NHL:           { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
-  MLB:           { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
-  Esports:       { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
-  Soccer:        { text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)',   border: 'rgba(90,122,31,0.28)' },
-  Weather:       { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
-  'Crypto/Commodities': { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
-  Economics:     { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
-  Politics:      { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
-  Entertainment: { text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)',   border: 'rgba(90,122,31,0.28)' },
-  General:       { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
+interface Opportunity {
+  ticker: string
+  eventTicker: string
+  title: string
+  subtitle: string
+  side: 'YES' | 'NO'
+  entryPrice: number
+  potentialReturn: number
+  impliedProb: number
+  expectedValue: number
+  edgeScore: number
+  spread: number
+  daysToClose: number
+  volume24h: number
+  category: string
+  rationale: string
+  closeTime: string
 }
 
-function catStyle(cat: string) {
-  return CATEGORY_COLORS[cat] || CATEGORY_COLORS['General']
+// ── CATEGORY COLOURS — Prosper & Partners palette ──
+const CAT_STYLE: Record<string, { text: string; bg: string; border: string }> = {
+  Sports:      { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  Economics:   { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  Politics:    { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
+  Weather:     { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  Commodities: { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
+  Markets:     { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  Entertainment:{ text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)', border: 'rgba(90,122,31,0.28)' },
+  General:     { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
 }
+const defaultCat = { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' }
 
-// ── RENDER HELPERS ───────────────────────────────────────────────────
+function catStyle(cat: string) { return CAT_STYLE[cat] || defaultCat }
+
 function scoreBar(score: number): string {
   const pct = Math.min(100, (score / 90) * 100)
-  // Lime green for high, teal for mid, warm for low
   const color = pct > 68 ? 'var(--lime)' : pct > 42 ? 'var(--teal)' : 'var(--warm-mid)'
   const textColor = pct > 68 ? 'var(--pos)' : pct > 42 ? 'var(--teal-dark)' : 'var(--warm-mid)'
-  return `
-    <div class="score-bar-wrap">
-      <div class="score-bar-track">
-        <div class="score-bar-fill" style="width:${pct}%;background:${color};"></div>
-      </div>
-      <span class="score-val" style="color:${textColor};">${score.toFixed(1)}</span>
-    </div>`
+  return `<div class="score-bar-wrap">
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%;background:${color};"></div></div>
+    <span class="score-val" style="color:${textColor};">${score.toFixed(1)}</span>
+  </div>`
 }
 
 function formatClose(days: number): string {
@@ -47,17 +53,18 @@ function formatClose(days: number): string {
   return `${Math.round(days / 30)}mo left`
 }
 
-function renderCard(opp: ScoredOpportunity, rank: number): string {
+function renderCard(opp: Opportunity, rank: number): string {
   const cs = catStyle(opp.category)
   const winProb = Math.round(opp.impliedProb * 100)
-  const ev = opp.expectedValue
-  const evColor = ev > 0 ? 'var(--pos)' : 'var(--neg)'
-  const evDisplay = (ev > 0 ? '+' : '') + ev.toFixed(1) + '¢'
-  const ret = opp.potentialReturn.toFixed(1)
+  const evColor = opp.expectedValue > 0 ? 'var(--pos)' : 'var(--neg)'
+  const evDisplay = (opp.expectedValue > 0 ? '+' : '') + opp.expectedValue.toFixed(1) + '¢'
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
-  const eventBase = (opp.market.event_ticker || opp.market.ticker || '').split('-')[0].toLowerCase()
+  const eventBase = (opp.eventTicker || opp.ticker || '').split('-')[0].toLowerCase()
   const kalshiUrl = `https://kalshi.com/markets/${eventBase}`
+  const volDisplay = opp.volume24h >= 1000000 ? (opp.volume24h/1000000).toFixed(1)+'M'
+                   : opp.volume24h >= 1000 ? (opp.volume24h/1000).toFixed(0)+'k'
+                   : opp.volume24h.toString()
 
   return `
   <div class="opp-card">
@@ -69,10 +76,8 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
         ${isHighConf ? '<span class="card-badge">High Conf</span>' : ''}
         <span class="card-close">${formatClose(opp.daysToClose)}</span>
       </div>
-
-      <h3 class="card-title">${opp.market.title}</h3>
-      ${opp.market.subtitle ? `<p class="card-subtitle">${opp.market.subtitle}</p>` : ''}
-
+      <h3 class="card-title">${opp.title}</h3>
+      ${opp.subtitle ? `<p class="card-subtitle">${opp.subtitle}</p>` : ''}
       <div class="card-metrics">
         <div class="metric">
           <span class="metric-label">Entry</span>
@@ -84,7 +89,7 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
         </div>
         <div class="metric">
           <span class="metric-label">Return</span>
-          <span class="metric-value return-val">+${ret}%</span>
+          <span class="metric-value return-val">+${opp.potentialReturn.toFixed(1)}%</span>
         </div>
         <div class="metric">
           <span class="metric-label">Exp. Value</span>
@@ -92,10 +97,9 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
         </div>
         <div class="metric">
           <span class="metric-label">Vol 24h</span>
-          <span class="metric-value">${opp.market.volume_24h >= 1000 ? (opp.market.volume_24h / 1000).toFixed(1) + 'k' : opp.market.volume_24h}</span>
+          <span class="metric-value">${volDisplay}</span>
         </div>
       </div>
-
       <div class="card-footer">
         <p class="card-rationale">${opp.rationale}</p>
         ${scoreBar(opp.edgeScore)}
@@ -125,8 +129,7 @@ function renderSkeleton(): string {
 }
 
 function renderError(msg: string): string {
-  return `
-  <div class="error-state">
+  return `<div class="error-state">
     <div class="error-icon">◌</div>
     <h3>Failed to load markets</h3>
     <p>${msg}</p>
@@ -135,20 +138,19 @@ function renderError(msg: string): string {
 }
 
 function renderEmpty(): string {
-  return `
-  <div class="error-state">
+  return `<div class="error-state">
     <div class="error-icon">◌</div>
     <h3>No opportunities found</h3>
-    <p>No markets in the scoring range right now. Check /api/debug to inspect raw market data.</p>
+    <p>No markets in scoring range right now. Check back soon or hit refresh.</p>
   </div>`
 }
 
-// ── FILTER STATE ─────────────────────────────────────────────────────
-let allOpps: ScoredOpportunity[] = []
+// ── STATE ──────────────────────────────────────────────────────────────
+let allOpps: Opportunity[] = []
 let activeCategory = 'All'
 let sortBy: 'score' | 'return' | 'prob' | 'close' = 'score'
 
-function getFiltered(): ScoredOpportunity[] {
+function getFiltered(): Opportunity[] {
   let list = activeCategory === 'All' ? allOpps : allOpps.filter(o => o.category === activeCategory)
   return [...list].sort((a, b) => {
     if (sortBy === 'score')  return b.edgeScore - a.edgeScore
@@ -167,18 +169,15 @@ function updateGrid() {
   grid.innerHTML = filtered.map((o, i) => renderCard(o, i + 1)).join('')
 }
 
-function updateCategoryTabs(opps: ScoredOpportunity[]) {
+function updateCategoryTabs(opps: Opportunity[]) {
   const counts: Record<string, number> = { All: opps.length }
   for (const o of opps) counts[o.category] = (counts[o.category] || 0) + 1
-
   const tabs = document.getElementById('cat-tabs')
   if (!tabs) return
   tabs.innerHTML = Object.entries(counts).map(([cat, n]) => `
     <button class="cat-tab ${cat === activeCategory ? 'active' : ''}" data-cat="${cat}">
       ${cat} <span class="cat-count">${n}</span>
-    </button>
-  `).join('')
-
+    </button>`).join('')
   tabs.querySelectorAll('.cat-tab').forEach(btn => {
     btn.addEventListener('click', () => {
       activeCategory = (btn as HTMLElement).dataset.cat || 'All'
@@ -189,7 +188,7 @@ function updateCategoryTabs(opps: ScoredOpportunity[]) {
   })
 }
 
-function updateStats(opps: ScoredOpportunity[]) {
+function updateStats(opps: Opportunity[], scanned: number) {
   const avgProb   = opps.length ? opps.reduce((s, o) => s + o.impliedProb, 0) / opps.length : 0
   const avgReturn = opps.length ? opps.reduce((s, o) => s + o.potentialReturn, 0) / opps.length : 0
   const set = (id: string, v: string) => { const e = document.getElementById(id); if (e) e.textContent = v }
@@ -199,37 +198,37 @@ function updateStats(opps: ScoredOpportunity[]) {
   set('stat-updated', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
 }
 
-// ── MAIN LOAD ─────────────────────────────────────────────────────────
+// ── LOAD ───────────────────────────────────────────────────────────────
 async function loadOpportunities() {
   const grid = document.getElementById('opp-grid')
   if (!grid) return
   grid.innerHTML = renderSkeleton()
-
   const status = document.getElementById('load-status')
-  if (status) status.textContent = 'Fetching markets…'
+  if (status) status.textContent = 'Scanning markets…'
 
   try {
-    const markets = await fetchOpenMarkets()
-    if (status) status.textContent = `Scoring ${markets.length} markets…`
+    const res = await fetch('/api/opportunities')
+    if (!res.ok) throw new Error(`Server error: ${res.status}`)
+    const data = await res.json()
+    if (data.error) throw new Error(data.error)
 
-    const opps = scoreMarkets(markets)
+    const opps: Opportunity[] = data.opportunities || []
     allOpps = opps
 
-    updateStats(opps)
+    updateStats(opps, data.scanned || 0)
     updateCategoryTabs(opps)
     updateGrid()
 
-    if (status) status.textContent = `${markets.length} scanned · ${opps.length} found`
+    if (status) status.textContent = `${data.scanned || 0} scanned · ${opps.length} found`
   } catch (err: any) {
     grid.innerHTML = renderError(err?.message || 'Unknown error')
     if (status) status.textContent = 'Load failed'
   }
 }
 
-// ── HTML SHELL ────────────────────────────────────────────────────────
+// ── SHELL ──────────────────────────────────────────────────────────────
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="page">
-
   <header>
     <div class="header-inner">
       <a class="logo" href="#">
@@ -259,22 +258,10 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <p class="hero-sub">High-probability, short-horizon positions ranked by expected value — calibrated against real trade history.</p>
       </div>
       <div class="stats-block">
-        <div class="stat-cell">
-          <span class="stat-val" id="stat-count">—</span>
-          <span class="stat-key">Opportunities</span>
-        </div>
-        <div class="stat-cell">
-          <span class="stat-val" id="stat-prob">—</span>
-          <span class="stat-key">Avg win prob</span>
-        </div>
-        <div class="stat-cell">
-          <span class="stat-val" id="stat-return">—</span>
-          <span class="stat-key">Avg return</span>
-        </div>
-        <div class="stat-cell">
-          <span class="stat-val" id="stat-updated">—</span>
-          <span class="stat-key">Last updated</span>
-        </div>
+        <div class="stat-cell"><span class="stat-val" id="stat-count">—</span><span class="stat-key">Opportunities</span></div>
+        <div class="stat-cell"><span class="stat-val" id="stat-prob">—</span><span class="stat-key">Avg win prob</span></div>
+        <div class="stat-cell"><span class="stat-val" id="stat-return">—</span><span class="stat-key">Avg return</span></div>
+        <div class="stat-cell"><span class="stat-val" id="stat-updated">—</span><span class="stat-key">Last updated</span></div>
       </div>
     </div>
   </section>
@@ -311,30 +298,23 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <div class="footer-inner">
       <div>
         <div class="footer-brand">Foretell</div>
-        <p>Data sourced from the <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> public API. Not financial advice. Past performance does not predict future results.</p>
+        <p>Data sourced from the <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> public API. Not financial advice.</p>
       </div>
       <div class="footer-right">
         <p>Score = EV (40) + price band (25)<br>+ liquidity (20) + spread (10) + horizon (5)</p>
       </div>
     </div>
   </footer>
-
 </div>`
 
-document.getElementById('sort-select')?.addEventListener('change', (e) => {
+document.getElementById('sort-select')?.addEventListener('change', e => {
   sortBy = (e.target as HTMLSelectElement).value as typeof sortBy
   updateGrid()
 })
-
 document.getElementById('btn-refresh')?.addEventListener('click', () => {
-  activeCategory = 'All'
-  sortBy = 'score'
-  loadOpportunities()
+  activeCategory = 'All'; sortBy = 'score'; loadOpportunities()
 })
-
 window.__foretellRetry = loadOpportunities
 loadOpportunities()
 
-declare global {
-  interface Window { __foretellRetry: () => void }
-}
+declare global { interface Window { __foretellRetry: () => void } }
