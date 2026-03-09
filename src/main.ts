@@ -1,63 +1,71 @@
 import './style.css'
 import { fetchOpenMarkets, scoreMarkets, type ScoredOpportunity } from './kalshi.ts'
 
-// ── CATEGORY COLOURS ────────────────────────────────────────────────
-const CATEGORY_COLORS: Record<string, string> = {
-  Economics:     '#f0a83c',
-  Crypto:        '#7c6af7',
-  Weather:       '#3cd9a0',
-  Sports:        '#e85858',
-  Politics:      '#5899e8',
-  Markets:       '#e8b458',
-  Entertainment: '#e858c8',
-  General:       '#8a92a8',
+// ── CATEGORY COLOURS — P&P palette ──────────────────────────────────
+const CATEGORY_COLORS: Record<string, { text: string; bg: string; border: string }> = {
+  Tennis:        { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  NCAA:          { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  NBA:           { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  NFL:           { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  NHL:           { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
+  MLB:           { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
+  Esports:       { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  Soccer:        { text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)',   border: 'rgba(90,122,31,0.28)' },
+  Weather:       { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  'Crypto/Commodities': { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
+  Economics:     { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  Politics:      { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
+  Entertainment: { text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)',   border: 'rgba(90,122,31,0.28)' },
+  General:       { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
 }
 
-function categoryColor(cat: string) {
-  return CATEGORY_COLORS[cat] || '#8a92a8'
+function catStyle(cat: string) {
+  return CATEGORY_COLORS[cat] || CATEGORY_COLORS['General']
 }
 
 // ── RENDER HELPERS ───────────────────────────────────────────────────
 function scoreBar(score: number): string {
   const pct = Math.min(100, (score / 90) * 100)
-  const color = pct > 70 ? '#3cd9a0' : pct > 45 ? '#f0a83c' : '#e85858'
+  // Lime green for high, teal for mid, warm for low
+  const color = pct > 68 ? 'var(--lime)' : pct > 42 ? 'var(--teal)' : 'var(--warm-mid)'
+  const textColor = pct > 68 ? 'var(--pos)' : pct > 42 ? 'var(--teal-dark)' : 'var(--warm-mid)'
   return `
     <div class="score-bar-wrap">
       <div class="score-bar-track">
         <div class="score-bar-fill" style="width:${pct}%;background:${color};"></div>
       </div>
-      <span class="score-val" style="color:${color};">${score.toFixed(1)}</span>
+      <span class="score-val" style="color:${textColor};">${score.toFixed(1)}</span>
     </div>`
 }
 
 function formatClose(days: number): string {
-  if (days < 0.042) return 'Closes in hours'
-  if (days < 1) return `Closes today`
-  if (days < 2) return `Closes tomorrow`
-  if (days < 7) return `${Math.round(days)}d left`
-  if (days < 30) return `${Math.round(days / 7)}wk left`
+  if (days < 0.042) return 'closes hours'
+  if (days < 1)     return 'closes today'
+  if (days < 2)     return 'closes tomorrow'
+  if (days < 7)     return `${Math.round(days)}d left`
+  if (days < 30)    return `${Math.round(days / 7)}wk left`
   return `${Math.round(days / 30)}mo left`
 }
 
 function renderCard(opp: ScoredOpportunity, rank: number): string {
-  const col = categoryColor(opp.category)
+  const cs = catStyle(opp.category)
   const winProb = Math.round(opp.impliedProb * 100)
   const ev = opp.expectedValue
-  const evColor = ev > 0 ? "var(--green)" : "var(--red)"
-  const evDisplay = (ev > 0 ? "+" : "") + ev.toFixed(1) + "¢"
+  const evColor = ev > 0 ? 'var(--pos)' : 'var(--neg)'
+  const evDisplay = (ev > 0 ? '+' : '') + ev.toFixed(1) + '¢'
   const ret = opp.potentialReturn.toFixed(1)
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
   const kalshiUrl = `https://kalshi.com/markets/${opp.market.event_ticker.toLowerCase()}`
 
   return `
-  <div class="opp-card" data-rank="${rank}">
+  <div class="opp-card">
     <div class="card-rank">${rank}</div>
     <div class="card-body">
       <div class="card-header">
-        <span class="card-cat" style="color:${col};border-color:${col}22;background:${col}11;">${opp.category}</span>
+        <span class="card-cat" style="color:${cs.text};border-color:${cs.border};background:${cs.bg};">${opp.category}</span>
         <span class="card-side ${opp.side === 'YES' ? 'side-yes' : 'side-no'}">${opp.side}</span>
-        ${isHighConf ? '<span class="card-badge">HIGH CONF</span>' : ''}
+        ${isHighConf ? '<span class="card-badge">High Conf</span>' : ''}
         <span class="card-close">${formatClose(opp.daysToClose)}</span>
       </div>
 
@@ -71,7 +79,7 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
         </div>
         <div class="metric">
           <span class="metric-label">Implied</span>
-          <span class="metric-value" style="color:${col};">${winProb}%</span>
+          <span class="metric-value">${winProb}%</span>
         </div>
         <div class="metric">
           <span class="metric-label">Return</span>
@@ -93,21 +101,23 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
       </div>
     </div>
     <a class="card-link" href="${kalshiUrl}" target="_blank" rel="noopener">
-      Trade on Kalshi →
+      Trade on Kalshi <span class="card-link-arrow">→</span>
     </a>
   </div>`
 }
 
 function renderSkeleton(): string {
   return Array.from({ length: 6 }, (_, i) => `
-    <div class="opp-card skeleton" style="animation-delay:${i * 0.08}s;">
-      <div class="card-rank sk-block" style="width:28px;height:28px;"></div>
+    <div class="opp-card" style="opacity:${1 - i*0.12}">
       <div class="card-body">
-        <div class="sk-block" style="width:30%;height:14px;margin-bottom:14px;"></div>
-        <div class="sk-block" style="width:85%;height:20px;margin-bottom:8px;"></div>
-        <div class="sk-block" style="width:60%;height:14px;margin-bottom:20px;"></div>
-        <div style="display:flex;gap:16px;">
-          ${Array.from({length:5}, () => '<div class="sk-block" style="width:60px;height:36px;"></div>').join('')}
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <div class="sk-line" style="width:70px;height:20px;"></div>
+          <div class="sk-line" style="width:40px;height:20px;"></div>
+        </div>
+        <div class="sk-line" style="width:88%;height:18px;margin-bottom:8px;"></div>
+        <div class="sk-line" style="width:65%;height:14px;margin-bottom:20px;"></div>
+        <div style="display:flex;gap:1px;">
+          ${Array.from({length:5}, () => '<div class="sk-line" style="flex:1;height:38px;"></div>').join('')}
         </div>
       </div>
     </div>`).join('')
@@ -116,19 +126,19 @@ function renderSkeleton(): string {
 function renderError(msg: string): string {
   return `
   <div class="error-state">
-    <div class="error-icon">⚠</div>
+    <div class="error-icon">◌</div>
     <h3>Failed to load markets</h3>
     <p>${msg}</p>
-    <button class="btn-retry" onclick="window.__foretellRetry()">Retry</button>
+    <button class="btn-retry" onclick="window.__foretellRetry()">Try again</button>
   </div>`
 }
 
 function renderEmpty(): string {
   return `
   <div class="error-state">
-    <div class="error-icon">◎</div>
+    <div class="error-icon">◌</div>
     <h3>No opportunities found</h3>
-    <p>Loading live data… if this persists, check /api/debug for raw market data.</p>
+    <p>No markets in the scoring range right now. Check /api/debug to inspect raw market data.</p>
   </div>`
 }
 
@@ -139,24 +149,20 @@ let sortBy: 'score' | 'return' | 'prob' | 'close' = 'score'
 
 function getFiltered(): ScoredOpportunity[] {
   let list = activeCategory === 'All' ? allOpps : allOpps.filter(o => o.category === activeCategory)
-  list = [...list].sort((a, b) => {
+  return [...list].sort((a, b) => {
     if (sortBy === 'score')  return b.edgeScore - a.edgeScore
     if (sortBy === 'return') return b.potentialReturn - a.potentialReturn
     if (sortBy === 'prob')   return b.impliedProb - a.impliedProb
     if (sortBy === 'close')  return a.daysToClose - b.daysToClose
     return 0
   })
-  return list
 }
 
 function updateGrid() {
   const grid = document.getElementById('opp-grid')
   if (!grid) return
   const filtered = getFiltered()
-  if (filtered.length === 0) {
-    grid.innerHTML = renderEmpty()
-    return
-  }
+  if (filtered.length === 0) { grid.innerHTML = renderEmpty(); return }
   grid.innerHTML = filtered.map((o, i) => renderCard(o, i + 1)).join('')
 }
 
@@ -183,24 +189,21 @@ function updateCategoryTabs(opps: ScoredOpportunity[]) {
 }
 
 function updateStats(opps: ScoredOpportunity[]) {
-  const avgProb = opps.length ? opps.reduce((s, o) => s + o.impliedProb, 0) / opps.length : 0
+  const avgProb   = opps.length ? opps.reduce((s, o) => s + o.impliedProb, 0) / opps.length : 0
   const avgReturn = opps.length ? opps.reduce((s, o) => s + o.potentialReturn, 0) / opps.length : 0
-  const el = (id: string, val: string) => { const e = document.getElementById(id); if (e) e.textContent = val }
-  el('stat-count', opps.length.toString())
-  el('stat-prob', `${Math.round(avgProb * 100)}%`)
-  el('stat-return', `${avgReturn.toFixed(1)}%`)
-  el('stat-updated', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
+  const set = (id: string, v: string) => { const e = document.getElementById(id); if (e) e.textContent = v }
+  set('stat-count', opps.length.toString())
+  set('stat-prob', `${Math.round(avgProb * 100)}%`)
+  set('stat-return', `${avgReturn.toFixed(1)}%`)
+  set('stat-updated', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
 }
 
 // ── MAIN LOAD ─────────────────────────────────────────────────────────
 async function loadOpportunities() {
   const grid = document.getElementById('opp-grid')
   if (!grid) return
-
-  // Show skeleton
   grid.innerHTML = renderSkeleton()
 
-  // Update status
   const status = document.getElementById('load-status')
   if (status) status.textContent = 'Fetching markets…'
 
@@ -215,83 +218,83 @@ async function loadOpportunities() {
     updateCategoryTabs(opps)
     updateGrid()
 
-    if (status) status.textContent = `${markets.length} scanned · ${opps.length} opportunities found`
-
+    if (status) status.textContent = `${markets.length} scanned · ${opps.length} found`
   } catch (err: any) {
     grid.innerHTML = renderError(err?.message || 'Unknown error')
-    const status = document.getElementById('load-status')
     if (status) status.textContent = 'Load failed'
   }
 }
 
-// ── MOUNT APP ─────────────────────────────────────────────────────────
+// ── HTML SHELL ────────────────────────────────────────────────────────
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="page">
 
-  <!-- HEADER -->
   <header>
     <div class="header-inner">
-      <div class="logo">
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="13" stroke="#f0a83c" stroke-width="1.5"/>
-          <path d="M7 19 L11 12 L15 16 L21 7" stroke="#f0a83c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          <circle cx="21" cy="7" r="2.5" fill="#f0a83c"/>
-        </svg>
-        <span class="logo-text">Foretell</span>
-      </div>
-      <div class="header-meta">
-        <span class="header-tag">Kalshi Scanner</span>
-        <span class="header-status" id="load-status">Loading…</span>
+      <a class="logo" href="#">
+        <div class="logo-mark">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M2 13 L6 8 L10 11 L16 3" stroke="#B6EE4F" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="16" cy="3" r="2" fill="#B6EE4F"/>
+          </svg>
+        </div>
+        <span class="logo-name">Foretell</span>
+      </a>
+      <div class="header-right">
+        <span class="header-eyebrow">Kalshi Scanner</span>
+        <span id="load-status">Loading…</span>
       </div>
     </div>
   </header>
 
-  <!-- HERO -->
   <section class="hero">
     <div class="hero-inner">
-      <div class="hero-text">
-        <h1>Today's Top <span class="accent">20</span> Kalshi Opportunities</h1>
-        <p>High-probability, short-horizon bets ranked by return-to-risk score. Updated daily from live Kalshi markets.</p>
+      <div class="hero-left">
+        <div class="hero-eyebrow">
+          <div class="hero-eyebrow-line"></div>
+          <span class="hero-eyebrow-text">Live Market Scanner</span>
+        </div>
+        <h1>Today's top <em>20</em><br>Kalshi opportunities.</h1>
+        <p class="hero-sub">High-probability, short-horizon positions ranked by expected value — calibrated against real trade history.</p>
       </div>
-      <div class="stats-row">
-        <div class="stat-box">
-          <span class="stat-n" id="stat-count">—</span>
-          <span class="stat-l">Opportunities</span>
+      <div class="stats-block">
+        <div class="stat-cell">
+          <span class="stat-val" id="stat-count">—</span>
+          <span class="stat-key">Opportunities</span>
         </div>
-        <div class="stat-box">
-          <span class="stat-n" id="stat-prob">—</span>
-          <span class="stat-l">Avg Win Prob</span>
+        <div class="stat-cell">
+          <span class="stat-val" id="stat-prob">—</span>
+          <span class="stat-key">Avg win prob</span>
         </div>
-        <div class="stat-box">
-          <span class="stat-n" id="stat-return">—</span>
-          <span class="stat-l">Avg Return</span>
+        <div class="stat-cell">
+          <span class="stat-val" id="stat-return">—</span>
+          <span class="stat-key">Avg return</span>
         </div>
-        <div class="stat-box">
-          <span class="stat-n" id="stat-updated">—</span>
-          <span class="stat-l">Last Updated</span>
+        <div class="stat-cell">
+          <span class="stat-val" id="stat-updated">—</span>
+          <span class="stat-key">Last updated</span>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- CONTROLS -->
   <div class="controls-bar">
     <div class="controls-inner">
       <div id="cat-tabs" class="cat-tabs">
         <button class="cat-tab active" data-cat="All">All</button>
       </div>
       <div class="sort-controls">
-        <span class="sort-label">Sort:</span>
+        <span class="sort-label">Sort</span>
         <select id="sort-select" class="sort-select">
-          <option value="score">Best Score</option>
-          <option value="return">Highest Return</option>
-          <option value="prob">Win Probability</option>
-          <option value="close">Closes Soonest</option>
+          <option value="score">Best score</option>
+          <option value="return">Highest return</option>
+          <option value="prob">Win probability</option>
+          <option value="close">Closes soonest</option>
         </select>
-        <button class="btn-refresh" id="btn-refresh" title="Refresh">
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M12 7A5 5 0 1 1 7 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-            <path d="M7 2l2-2M7 2l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <button class="btn-refresh" id="btn-refresh">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
+            <path d="M11 6A5 5 0 1 1 6 1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M6 1l2.5-1.5M6 1l2.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           Refresh
         </button>
@@ -299,39 +302,36 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     </div>
   </div>
 
-  <!-- GRID -->
   <main class="main-grid">
     <div id="opp-grid" class="opp-grid"></div>
   </main>
 
-  <!-- FOOTER -->
   <footer>
     <div class="footer-inner">
-      <p>Data sourced live from <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> public API. Not financial advice. Trade responsibly.</p>
-      <p class="footer-score-note">Score = probability (35) + return (25) + liquidity (20) + spread (10) + horizon (10)</p>
+      <div>
+        <div class="footer-brand">Foretell</div>
+        <p>Data sourced from the <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> public API. Not financial advice. Past performance does not predict future results.</p>
+      </div>
+      <div class="footer-right">
+        <p>Score = EV (40) + price band (25)<br>+ liquidity (20) + spread (10) + horizon (5)</p>
+      </div>
     </div>
   </footer>
 
-</div>
-`
+</div>`
 
-// Wire up sort
 document.getElementById('sort-select')?.addEventListener('change', (e) => {
   sortBy = (e.target as HTMLSelectElement).value as typeof sortBy
   updateGrid()
 })
 
-// Wire up refresh
 document.getElementById('btn-refresh')?.addEventListener('click', () => {
   activeCategory = 'All'
   sortBy = 'score'
   loadOpportunities()
 })
 
-// Retry hook
 window.__foretellRetry = loadOpportunities
-
-// Kick off
 loadOpportunities()
 
 declare global {
