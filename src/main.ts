@@ -208,7 +208,7 @@ async function loadOpportunities() {
   if (status) status.textContent = 'Fetching markets…'
 
   try {
-    const markets = await fetchOpenMarkets(5)
+    const markets = await fetchOpenMarkets()
     if (status) status.textContent = `Scoring ${markets.length} markets…`
 
     const opps = scoreMarkets(markets)

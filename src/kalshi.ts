@@ -1,10 +1,7 @@
-// ── KALSHI API CLIENT ──────────────────────────────────────────────
-// Calibrated against real trade history (257 trades, Jan–Mar 2026)
-// Win rates by entry price band:
-//   60-69¢: 81% win rate, ~52% avg return
-//   70-79¢: 73% win rate, ~35% avg return  ← sweet spot (most volume)
-//   80-89¢: 76% win rate, ~20% avg return
-//   90+¢:  100% win rate, ~8% avg return
+// ── KALSHI SCORER ──────────────────────────────────────────────────────
+// API approach: min_close_ts/max_close_ts time windows (required for real markets)
+// Scoring: calibrated against real trade history (257 trades, Jan–Mar 2026)
+// Category filters: based on empirical P&L from Lovable backtest data
 
 const PROXY = '/api/markets'
 
@@ -13,6 +10,8 @@ export interface KalshiMarket {
   event_ticker: string
   title: string
   subtitle: string
+  yes_sub_title: string
+  event_title: string
   status: string
   yes_bid: number
   yes_ask: number
@@ -23,69 +22,141 @@ export interface KalshiMarket {
   no_bid_dollars: string
   no_ask_dollars: string
   last_price: number
+  last_price_dollars: string
+  previous_price: number
   volume: number
   volume_24h: number
+  volume_24h_fp: string
   open_interest: number
   close_time: string
   expiration_time: string
-  result: string
 }
 
 export interface ScoredOpportunity {
   market: KalshiMarket
   side: 'YES' | 'NO'
-  entryPrice: number      // cents
-  potentialReturn: number // % return if win
-  impliedProb: number     // 0–1
-  expectedValue: number   // EV in cents per $1 risked
-  edgeScore: number       // composite 0–100
-  spread: number          // cents
+  entryPrice: number
+  potentialReturn: number
+  impliedProb: number
+  expectedValue: number
+  edgeScore: number
+  spread: number
   daysToClose: number
   category: string
   rationale: string
 }
 
-// Normalise price to cents — Kalshi returns either int cents or dollar string
-function toCents(intField: number, dollarField: string): number {
-  if (intField > 0) return intField
-  if (dollarField) {
-    const p = Math.round(parseFloat(dollarField) * 100)
-    if (p > 0) return p
-  }
+// ── Price extraction (mirrors Lovable's dollar-first approach) ──
+function getYesPrice(m: KalshiMarket): number {
+  if (m.yes_ask_dollars) { const p = Math.round(parseFloat(m.yes_ask_dollars) * 100); if (p > 0) return p }
+  if (m.yes_bid_dollars) { const p = Math.round(parseFloat(m.yes_bid_dollars) * 100); if (p > 0) return p }
+  if (m.last_price_dollars) { const p = Math.round(parseFloat(m.last_price_dollars) * 100); if (p > 0) return p }
+  if (m.yes_ask > 0) return m.yes_ask
+  if (m.yes_bid > 0) return m.yes_bid
+  if (m.last_price > 0) return m.last_price
   return 0
 }
 
-// Historical win rates from real trade data
-// Used to compute expected value beyond raw implied probability
-function historicalWinRate(entryCents: number): number {
-  if (entryCents >= 90) return 0.97
-  if (entryCents >= 80) return 0.76
-  if (entryCents >= 70) return 0.73
-  if (entryCents >= 60) return 0.81
-  if (entryCents >= 50) return 0.39
-  return 0.10 // below 50¢ — historically very poor
+// ── Historical win rates from real trade data ──
+function historicalWinRate(prob: number): number {
+  if (prob >= 90) return 0.97
+  if (prob >= 80) return 0.76
+  if (prob >= 70) return 0.73
+  if (prob >= 60) return 0.81
+  if (prob >= 50) return 0.39
+  return 0.10
 }
 
-export async function fetchOpenMarkets(pages = 5): Promise<KalshiMarket[]> {
-  const markets: KalshiMarket[] = []
-  let cursor = ''
+// ── Category detection (from Lovable, tuned to P&P colour system) ──
+function detectCategory(ticker: string, eventTicker: string, title: string): string | null {
+  const combined = (ticker + ' ' + eventTicker + ' ' + title).toUpperCase()
 
-  for (let i = 0; i < pages; i++) {
-    const url = new URL(PROXY, window.location.origin)
-    url.searchParams.set('limit', '1000')
-    if (cursor) url.searchParams.set('cursor', cursor)
+  // ── HARD EXCLUDES (empirically negative edge from Lovable backtest) ──
+  const isEntertainment =
+    combined.includes('NETFLIX') || combined.includes('SPOTIFY') ||
+    combined.includes('GRAMMY') || combined.includes('OSCAR') ||
+    combined.includes('EMMY') || combined.includes('GOLDEN GLOBE') ||
+    combined.includes('BOX OFFICE') || combined.includes('ROTTEN TOMATOES') ||
+    combined.includes('SUPER BOWL AD') || combined.includes('ALBUM')
 
-    const res = await fetch(url.toString())
-    if (!res.ok) throw new Error(`Proxy error: ${res.status}`)
-    const data = await res.json()
-    if (data.error) throw new Error(data.error)
+  const isPoliticalMention =
+    (combined.includes('MENTION') || combined.includes('ATTEND') || combined.includes('APPEARANCE')) &&
+    (combined.includes('TRUMP') || combined.includes('CONGRESS') || combined.includes('GOVERNOR') ||
+     combined.includes('SOTU') || combined.includes('PRESIDENT'))
 
-    markets.push(...(data.markets || []))
-    cursor = data.cursor || ''
-    if (!cursor) break
+  const isSayBet = combined.includes('KXTRUMPSAY') || combined.includes('KXCONGRESSMENTION') ||
+    combined.includes('KXGOVERNORMENTION')
+
+  const isSoccer =
+    combined.includes('EPL') || combined.includes('BUNDESLIGA') || combined.includes('LALIGA') ||
+    combined.includes('SERIEA') || combined.includes('LIGUE1') || combined.includes('FACUP') ||
+    combined.includes('CHAMPIONSLEAGUE') || combined.includes('UCL') || combined.includes('UEL') ||
+    combined.includes('UECL') || combined.includes('MLS') || combined.includes('DIMAYORGAME') ||
+    combined.includes('ALEAGUEGAME') || combined.includes('JBLEAGUEGAME') || combined.includes('HNLGAME') ||
+    combined.includes('VTBGAME') || combined.includes('SAUDIPLGAME') || combined.includes('FIBAGAME') ||
+    combined.includes('DENBUPERLIGA') || combined.includes('SCOTTISHPREM') || combined.includes('EFLCHAMP') ||
+    combined.includes('SIXNATIONS') || combined.includes('AFCCL') || combined.includes('DPWORLDTOUR') ||
+    combined.includes('EUROLEAGUE') || combined.includes('FIBAECUP')
+
+  const isMultiOutcomeSpeculation =
+    combined.includes('NEXTTEAM') || combined.includes('SURVIVOR') ||
+    combined.includes('FIRSTSUPERBOWLSONG') || combined.includes('ATTENDSOTU') ||
+    combined.includes('SUPERBOWLAD') || combined.includes('TOPMODEL') ||
+    combined.includes('NETFLIXRANK') || combined.includes('NETFLIXRANKMOVIE') ||
+    combined.includes('ALBUNSALES')
+
+  if (isEntertainment || isPoliticalMention || isSayBet || isSoccer || isMultiOutcomeSpeculation) {
+    return null // hard exclude
   }
 
-  return markets
+  // ── CATEGORISE ──
+  if (combined.includes('ATP') || combined.includes('WTA') || combined.includes('ATPMATCH') ||
+      combined.includes('WTAMATCH') || combined.includes('ATPCHAL') || combined.includes('WTACHAL') ||
+      combined.includes('DPLWTOUR') || combined.includes('LOLGAME') || combined.includes('CS2GAME') ||
+      combined.includes('VALORANT') || combined.includes('NBAGAME') || combined.includes('NBAMENT') ||
+      combined.includes('NHLGAME') || combined.includes('NCAAMB') || combined.includes('NCAAWB') ||
+      combined.includes('NCAABB') || combined.includes('WOHOCKEY') || combined.includes('WOMHOCKEY') ||
+      combined.includes('WOFSKATE') || combined.includes('WOSKIMTN') || combined.includes('NBLGAME') ||
+      combined.includes('EPLGAME') || combined.includes('MLBST') || combined.includes('NFLMENT') ||
+      combined.includes('KXSB-') || combined.includes('KXNBA') || combined.includes('KXNFL') ||
+      combined.includes('KXNHL') || combined.includes('KXMLB') || combined.includes('KXUCLGAME') ||
+      combined.includes('KXUELGAME') || combined.includes('SPORT'))
+    return 'Sports'
+
+  if (combined.includes('FED') || combined.includes('FOMC') || combined.includes('KXCPI') ||
+      combined.includes('KXGDP') || combined.includes('KXPAYROLL') || combined.includes('KXU3') ||
+      combined.includes('KXEOWEEK') || combined.includes('KXRT-') || combined.includes('INFLATION') ||
+      combined.includes('UNEMPLOYMENT') || combined.includes('JOBS') || combined.includes('TREASURY'))
+    return 'Economics'
+
+  if (combined.includes('KXBTC') || combined.includes('KXETH') || combined.includes('KXGOLD') ||
+      combined.includes('BITCOIN') || combined.includes('ETHEREUM') || combined.includes('CRYPTO'))
+    return 'Crypto/Commodities'
+
+  if (combined.includes('INXD') || combined.includes('SP500') || combined.includes('NASDAQ') ||
+      combined.includes('NDX') || combined.includes('S&P'))
+    return 'Markets'
+
+  if (combined.includes('PRESIDENT') || combined.includes('ELECTION') || combined.includes('SENATE') ||
+      combined.includes('CONGRESS') || combined.includes('TRUMP') || combined.includes('SHUTDOWN') ||
+      combined.includes('SCOTUS') || combined.includes('GOVERNMENT'))
+    return 'Politics'
+
+  if (combined.includes('KXHIGH') || combined.includes('KXLOW') || combined.includes('WEATHER') ||
+      combined.includes('SNOW') || combined.includes('RAIN') || combined.includes('HURRICANE') ||
+      combined.includes('SNOWSTORM') || combined.includes('NYCSNOW') || combined.includes('DCSNOW') ||
+      combined.includes('HIGHMIA') || combined.includes('HIGHLAX') || combined.includes('HIGHDEN'))
+    return 'Weather'
+
+  return 'General'
+}
+
+export async function fetchOpenMarkets(): Promise<KalshiMarket[]> {
+  const res = await fetch(PROXY)
+  if (!res.ok) throw new Error(`Proxy error: ${res.status}`)
+  const data = await res.json()
+  if (data.error) throw new Error(data.error)
+  return data.markets || []
 }
 
 // ── SCORING ENGINE ──────────────────────────────────────────────────
@@ -94,148 +165,116 @@ function daysUntil(isoDate: string): number {
   return Math.max(0, (new Date(isoDate).getTime() - Date.now()) / 86400000)
 }
 
-function inferCategory(ticker: string, title: string): string {
-  const t = (ticker + ' ' + title).toLowerCase()
-  // Sports — most common in real data
-  if (/kxatp|atpmatch|atpchal|wtamatch|wtachal/.test(t)) return 'Tennis'
-  if (/ncaamb|ncaawb|ncaabb/.test(t)) return 'NCAA'
-  if (/kxnba|nbagame|nbament|nbatrad/.test(t)) return 'NBA'
-  if (/kxnfl|nflment|superbowl|kxsb-/.test(t)) return 'NFL'
-  if (/kxnhl|nhlgame/.test(t)) return 'NHL'
-  if (/kxmlb|mlbst/.test(t)) return 'MLB'
-  if (/cs2game|lolgame|valorant|esport/.test(t)) return 'Esports'
-  if (/epl|laliga|seriea|ligue1|facup|ucl|uel|uecl|bundesl|mls|soccer|football/.test(t)) return 'Soccer'
-  if (/kxhigh|kxlow|weather|snow|rain|temp|hurricane/.test(t)) return 'Weather'
-  if (/kxbtc|kxeth|kxgold|crypto|bitcoin/.test(t)) return 'Crypto/Commodities'
-  if (/kxfed|kxcpi|kxgdp|kxpayroll|kxu3|kxeoweek|fomc|inflation/.test(t)) return 'Economics'
-  if (/kxtrump|congress|senate|president|election|politics/.test(t)) return 'Politics'
-  if (/netflix|spotify|oscar|grammy|movie|show|album/.test(t)) return 'Entertainment'
-  return 'General'
-}
-
 export function scoreMarkets(markets: KalshiMarket[]): ScoredOpportunity[] {
-  const raw: Array<{
+  const candidates: Array<{
     market: KalshiMarket
     side: 'YES' | 'NO'
     entryPrice: number
-    impliedProb: number
-    historicalWR: number
-    potentialReturn: number
-    expectedValue: number
+    prob: number
+    ev: number
     spread: number
-    daysToClose: number
+    days: number
+    category: string
   }> = []
 
   for (const m of markets) {
-    if (m.status !== 'open' && m.status !== 'active') continue
+    const category = detectCategory(m.ticker, m.event_ticker || '', m.title || '')
+    if (!category) continue // hard-excluded category
 
-    const yesBid = toCents(m.yes_bid, m.yes_bid_dollars)
-    const yesAsk = toCents(m.yes_ask, m.yes_ask_dollars)
-    const noBid  = toCents(m.no_bid,  m.no_bid_dollars)
-    const noAsk  = toCents(m.no_ask,  m.no_ask_dollars)
+    const yesPrice = getYesPrice(m)
+    if (yesPrice <= 0) continue
 
+    const noPrice = 100 - yesPrice
     const days = daysUntil(m.close_time || m.expiration_time)
 
-    // YES side — only score the 55–95¢ band (validated range from trade data)
-    if (yesAsk >= 55 && yesAsk <= 95) {
-      const hwr = historicalWinRate(yesAsk)
-      const ret = (100 - yesAsk) / yesAsk * 100
-      const ev  = hwr * (100 - yesAsk) - (1 - hwr) * yesAsk
-      raw.push({
-        market: m, side: 'YES',
-        entryPrice: yesAsk,
-        impliedProb: yesAsk / 100,
-        historicalWR: hwr,
-        potentialReturn: ret,
-        expectedValue: ev,
-        spread: Math.max(0, yesAsk - yesBid),
-        daysToClose: days,
-      })
+    // Score YES side — sweet spot 65–93% from real trade data
+    if (yesPrice >= 65 && yesPrice <= 93) {
+      const hwr = historicalWinRate(yesPrice)
+      const ev = hwr * (100 - yesPrice) - (1 - hwr) * yesPrice
+      const spread = Math.max(0, (m.yes_ask || 0) - (m.yes_bid || 0))
+      candidates.push({ market: m, side: 'YES', entryPrice: yesPrice, prob: yesPrice, ev, spread, days, category })
     }
 
-    // NO side
-    if (noAsk >= 55 && noAsk <= 95) {
+    // Score NO side (equivalent to YES on the other outcome)
+    const noAsk = m.no_ask > 0 ? m.no_ask : Math.round(parseFloat(m.no_ask_dollars || '0') * 100)
+    if (noAsk >= 65 && noAsk <= 93) {
       const hwr = historicalWinRate(noAsk)
-      const ret = (100 - noAsk) / noAsk * 100
-      const ev  = hwr * (100 - noAsk) - (1 - hwr) * noAsk
-      raw.push({
-        market: m, side: 'NO',
-        entryPrice: noAsk,
-        impliedProb: noAsk / 100,
-        historicalWR: hwr,
-        potentialReturn: ret,
-        expectedValue: ev,
-        spread: Math.max(0, noAsk - noBid),
-        daysToClose: days,
-      })
+      const ev = hwr * (100 - noAsk) - (1 - hwr) * noAsk
+      const spread = Math.max(0, (m.no_ask || 0) - (m.no_bid || 0))
+      candidates.push({ market: m, side: 'NO', entryPrice: noAsk, prob: noAsk, ev, spread, days, category })
     }
   }
 
-  if (raw.length === 0) return []
+  if (candidates.length === 0) return []
 
-  const maxVol = Math.max(...raw.map(r => r.market.volume_24h || r.market.volume || 1), 1)
+  const maxVol = Math.max(...candidates.map(c => c.market.volume_24h || c.market.volume || 1), 1)
 
-  const scored: ScoredOpportunity[] = raw.map(r => {
-    const p = r.entryPrice
+  const scored: ScoredOpportunity[] = candidates.map(c => {
+    const p = c.prob
 
-    // 1. EV score (40pts) — positive EV is the core signal
-    //    Max EV in sweet spot ~25¢, normalise to 40pts
-    const evScore = Math.max(0, Math.min(40, (r.expectedValue / 25) * 40))
+    // EV score (40pts) — primary signal
+    const evScore = Math.max(0, Math.min(40, (c.ev / 25) * 40))
 
-    // 2. Price band score (25pts) — calibrated to real win rates
-    //    60–79¢ is the historical sweet spot
-    const bandScore = p >= 60 && p <= 79 ? 25
-      : p >= 80 && p <= 89 ? 20
-      : p >= 55 && p < 60  ? 15
-      : p >= 90             ? 12
-      : 8
+    // Price band score (25pts) — calibrated to real win rates
+    // 65–79¢ sweet spot (81% and 73% historical win rate)
+    const bandScore =
+      p >= 75 && p <= 87 ? 25 :   // Prime zone (Lovable backtest: best hit rate)
+      p >= 65 && p <  75 ? 22 :   // Strong zone
+      p >= 88 && p <= 93 ? 15 :   // Safe but thin
+      10
 
-    // 3. Liquidity (20pts)
-    const vol = r.market.volume_24h || r.market.volume || 0
+    // Liquidity (20pts)
+    const vol = c.market.volume_24h || c.market.volume || 0
     const liquidityScore = (vol / maxVol) * 20
 
-    // 4. Spread (10pts) — tight spread = real market, not illiquid stub
-    const spreadScore = r.spread <= 1 ? 10 : r.spread <= 3 ? 7 : r.spread <= 6 ? 4 : 1
+    // Spread (10pts)
+    const spreadScore = c.spread <= 2 ? 10 : c.spread <= 5 ? 7 : c.spread <= 10 ? 4 : 1
 
-    // 5. Horizon (5pts) — shorter resolves sooner (less overnight risk)
-    const horizonScore = r.daysToClose <= 1 ? 5 : r.daysToClose <= 7 ? 4 : r.daysToClose <= 30 ? 2 : 1
+    // Horizon (5pts) — shorter is better (less overnight risk)
+    const horizonScore = c.days <= 1 ? 5 : c.days <= 3 ? 4 : c.days <= 7 ? 2 : 1
 
-    const edgeScore = evScore + bandScore + liquidityScore + spreadScore + horizonScore
+    // Category bonus/penalty based on backtest data
+    const catBonus =
+      c.category === 'Economics' ? 3 :
+      c.category === 'Weather'   ? 2 :
+      c.category === 'Markets'   ? 2 :
+      c.category === 'Sports'    ? 0 :
+      c.category === 'Politics'  ? -2 :
+      0
 
-    // Build rationale
-    const horizon = r.daysToClose < 0.5 ? 'closes today'
-      : r.daysToClose < 1.5 ? 'closes tomorrow'
-      : r.daysToClose < 7 ? `closes in ${Math.round(r.daysToClose)}d`
-      : `closes in ${Math.round(r.daysToClose / 7)}wk`
-    const evLabel = r.expectedValue > 0
-      ? `+${r.expectedValue.toFixed(1)}¢ EV`
-      : `${r.expectedValue.toFixed(1)}¢ EV`
-    const liq = r.spread <= 2 ? 'tight spread' : r.spread <= 5 ? 'moderate spread' : 'wide spread'
-    const rationale = `${Math.round(r.historicalWR * 100)}% hist. win rate · +${r.potentialReturn.toFixed(1)}% return · ${evLabel} · ${horizon} · ${liq}`
+    const edgeScore = evScore + bandScore + liquidityScore + spreadScore + horizonScore + catBonus
+
+    // Rationale string
+    const ret = ((100 - c.entryPrice) / c.entryPrice * 100).toFixed(1)
+    const horizon = c.days < 0.5 ? 'today' : c.days < 1.5 ? 'tomorrow' : c.days < 7 ? `${Math.round(c.days)}d` : `${Math.round(c.days / 7)}wk`
+    const evLabel = (c.ev > 0 ? '+' : '') + c.ev.toFixed(1) + '¢ EV'
+    const liq = c.spread <= 2 ? 'tight spread' : c.spread <= 6 ? 'moderate spread' : 'wide spread'
+    const rationale = `${Math.round(historicalWinRate(p) * 100)}% hist. win · +${ret}% return · ${evLabel} · closes ${horizon} · ${liq}`
 
     return {
-      market: r.market,
-      side: r.side,
-      entryPrice: r.entryPrice,
-      potentialReturn: r.potentialReturn,
-      impliedProb: r.impliedProb,
-      expectedValue: r.expectedValue,
+      market: c.market,
+      side: c.side,
+      entryPrice: c.entryPrice,
+      potentialReturn: parseFloat(ret),
+      impliedProb: c.prob / 100,
+      expectedValue: c.ev,
       edgeScore,
-      spread: r.spread,
-      daysToClose: r.daysToClose,
-      category: inferCategory(r.market.ticker, r.market.title),
+      spread: c.spread,
+      daysToClose: c.days,
+      category,
       rationale,
     }
   })
 
   scored.sort((a, b) => b.edgeScore - a.edgeScore)
 
-  // Deduplicate — best side per market ticker
+  // Deduplicate — one best side per event ticker
   const seen = new Set<string>()
   const top: ScoredOpportunity[] = []
   for (const s of scored) {
-    if (!seen.has(s.market.ticker)) {
-      seen.add(s.market.ticker)
+    const key = s.market.event_ticker || s.market.ticker
+    if (!seen.has(key)) {
+      seen.add(key)
       top.push(s)
     }
     if (top.length >= 20) break

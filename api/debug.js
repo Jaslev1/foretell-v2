@@ -2,45 +2,35 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
 
   try {
+    const nowTs = Math.floor(Date.now() / 1000)
+    const results = {}
+
+    // Fetch 0-3 day window with mve_filter (same as markets.js)
     const url = new URL('https://api.elections.kalshi.com/trade-api/v2/markets')
-    url.searchParams.set('limit', '1000')
+    url.searchParams.set('limit', '500')
     url.searchParams.set('status', 'open')
+    url.searchParams.set('mve_filter', 'exclude')
+    url.searchParams.set('min_close_ts', nowTs.toString())
+    url.searchParams.set('max_close_ts', (nowTs + 3 * 86400).toString())
 
     const r = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } })
     const d = await r.json()
-    const all = d.markets || []
+    const markets = d.markets || []
 
-    // Skip MVE junk but NO price filter — show raw values
-    const real = all.filter(m => m.ticker &&
-      !m.ticker.includes('CROSSCATEGORY') &&
-      !m.ticker.includes('MVE'))
+    results.http_status = r.status
+    results.count = markets.length
+    results.sample = markets.slice(0, 8).map(m => ({
+      ticker: m.ticker,
+      title: m.title?.slice(0, 55),
+      status: m.status,
+      yes_ask: m.yes_ask,
+      yes_ask_dollars: m.yes_ask_dollars,
+      no_ask: m.no_ask,
+      volume_24h: m.volume_24h,
+      close_time: m.close_time,
+    }))
 
-    // Bucket by yes_ask value to understand distribution
-    const buckets = {}
-    for (const m of real) {
-      const key = `yes_ask=${m.yes_ask} yes_ask_$=${m.yes_ask_dollars} no_ask=${m.no_ask} no_ask_$=${m.no_ask_dollars}`
-      buckets[key] = (buckets[key] || 0) + 1
-    }
-
-    // Top 20 most common price combos
-    const topBuckets = Object.entries(buckets)
-      .sort((a,b) => b[1]-a[1])
-      .slice(0,20)
-      .map(([k,v]) => `${v}x  ${k}`)
-
-    // First 5 non-MVE markets with ALL their fields
-    const rawSample = real.slice(0,5).map(m => {
-      const out = {}
-      for (const k of Object.keys(m)) out[k] = m[k]
-      return out
-    })
-
-    res.status(200).json({
-      total_raw: all.length,
-      non_mve: real.length,
-      price_distribution: topBuckets,
-      raw_sample: rawSample
-    })
+    res.status(200).json(results)
   } catch (err) {
     res.status(500).json({ error: err.message })
   }
