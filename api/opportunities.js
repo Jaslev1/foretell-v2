@@ -110,9 +110,13 @@ function scoreOpportunity(m, side, price, category, maxVol) {
   const liq = spread <= 2 ? 'tight spread' : spread <= 6 ? 'moderate spread' : 'wide spread'
   const rationale = `${Math.round(hwr * 100)}% hist. win · +${ret.toFixed(1)}% return · ${evLabel} · closes ${horizon} · ${liq}`
 
+  const eventTicker = m.event_ticker || m.ticker.split('-').slice(0,-1).join('-')
+  const kalshiUrl = `https://kalshi.com/markets/${eventTicker.toLowerCase()}/${m.ticker.toLowerCase()}`
+
   return {
     ticker: m.ticker,
-    eventTicker: m.event_ticker || m.ticker.split('-').slice(0,-1).join('-'),
+    eventTicker,
+    kalshiUrl,
     title: m.title || m.ticker,
     subtitle: m.subtitle || m.yes_sub_title || '',
     side,

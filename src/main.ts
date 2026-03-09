@@ -17,6 +17,7 @@ interface Opportunity {
   category: string
   rationale: string
   closeTime: string
+  kalshiUrl: string
 }
 
 // ── CATEGORY COLOURS — Prosper & Partners palette ──
@@ -60,13 +61,7 @@ function renderCard(opp: Opportunity, rank: number): string {
   const evDisplay = (opp.expectedValue > 0 ? '+' : '') + opp.expectedValue.toFixed(1) + '¢'
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
-  // Full event ticker = all segments except last outcome suffix (e.g. KXNBAGAME-26MAR08CHISAC not KXNBAGAME)
-  const tickerParts = (opp.eventTicker || opp.ticker || '').split('-')
-  const eventSlug = (opp.eventTicker
-    ? opp.eventTicker                                    // use event_ticker directly if available
-    : tickerParts.slice(0, -1).join('-')                 // else strip last segment
-  ).toLowerCase()
-  const kalshiUrl = `https://kalshi.com/markets/${eventSlug}`
+  const kalshiUrl = opp.kalshiUrl
   const volDisplay = opp.volume24h >= 1000000 ? (opp.volume24h/1000000).toFixed(1)+'M'
                    : opp.volume24h >= 1000 ? (opp.volume24h/1000).toFixed(0)+'k'
                    : opp.volume24h.toString()
@@ -111,15 +106,23 @@ function renderCard(opp: Opportunity, rank: number): string {
       </div>
     </div>
     <div class="card-actions">
-      <a class="card-link-primary" href="${kalshiUrl}" target="_blank" rel="noopener">
-        Trade on Kalshi <span class="card-link-arrow">→</span>
-      </a>
-      <button class="card-copy-btn" data-ticker="${opp.ticker}" title="Copy ticker to search on Kalshi">
-        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-          <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/>
-          <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+      <a class="card-kalshi-btn" href="https://kalshi.com/markets" target="_blank" rel="noopener">
+        Open Kalshi
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
+          <path d="M2 8L8 2M8 2H4M8 2V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-      </button>
+      </a>
+      <div class="card-search-hint">
+        <span class="search-hint-label">Search Kalshi for:</span>
+        <button class="card-copy-btn" data-copy="${opp.title}" data-ticker="${opp.ticker}">
+          <span class="copy-text">"${opp.title}"</span>
+          <svg class="copy-icon" width="12" height="12" viewBox="0 0 13 13" fill="none">
+            <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span class="copy-confirm">✓ Copied</span>
+        </button>
+      </div>
     </div>
   </div>`
 }
@@ -215,11 +218,10 @@ function updateStats(opps: Opportunity[], scanned: number) {
 document.addEventListener('click', (e) => {
   const btn = (e.target as Element).closest('.card-copy-btn') as HTMLElement | null
   if (!btn) return
-  const ticker = btn.dataset.ticker || ''
-  navigator.clipboard.writeText(ticker).then(() => {
+  const text = btn.dataset.copy || btn.dataset.ticker || ''
+  navigator.clipboard.writeText(text).then(() => {
     btn.classList.add('copied')
-    btn.title = 'Copied!'
-    setTimeout(() => { btn.classList.remove('copied'); btn.title = 'Copy ticker to search on Kalshi' }, 1800)
+    setTimeout(() => btn.classList.remove('copied'), 2000)
   })
 })
 
