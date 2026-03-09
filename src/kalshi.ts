@@ -181,6 +181,10 @@ export function scoreMarkets(markets: KalshiMarket[]): ScoredOpportunity[] {
     const category = detectCategory(m.ticker, m.event_ticker || '', m.title || '')
     if (!category) continue // hard-excluded category
 
+    // Skip zero-volume markets (strike variants with no real interest)
+    const vol = m.volume_24h || m.volume || 0
+    if (vol < 5) continue
+
     const yesPrice = getYesPrice(m)
     if (yesPrice <= 0) continue
 
@@ -224,8 +228,8 @@ export function scoreMarkets(markets: KalshiMarket[]): ScoredOpportunity[] {
       10
 
     // Liquidity (20pts)
-    const vol = c.market.volume_24h || c.market.volume || 0
-    const liquidityScore = (vol / maxVol) * 20
+    const vol2 = c.market.volume_24h || c.market.volume || 0
+    const liquidityScore = (vol2 / maxVol) * 20
 
     // Spread (10pts)
     const spreadScore = c.spread <= 2 ? 10 : c.spread <= 5 ? 7 : c.spread <= 10 ? 4 : 1
