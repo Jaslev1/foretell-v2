@@ -388,20 +388,22 @@ header {
 .card-rank {
   position: absolute; top: 0; right: 0;
   font-family: var(--font-mono);
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   color: var(--ink4);
   background: var(--cream2);
   border-left: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
-  width: 28px; height: 28px;
+  width: 26px; height: 24px;
   display: flex; align-items: center; justify-content: center;
   font-weight: 500;
+  z-index: 1;
 }
 
 .card-body {
   padding: 24px 24px 18px;
   flex: 1;
 }
+
 
 /* ── Card header ── */
 .card-header {
@@ -456,6 +458,7 @@ header {
   color: var(--ink4);
   margin-left: auto;
   letter-spacing: 0.04em;
+  padding-right: 32px; /* clear the rank badge */
 }
 
 /* ── Title ── */
@@ -547,8 +550,14 @@ header {
   text-align: right;
 }
 
-/* ── Trade link ── */
-.card-link {
+/* ── Card actions (trade link + copy) ── */
+.card-actions {
+  display: flex;
+  border-top: 1px solid var(--rule2);
+}
+
+.card-link-primary {
+  flex: 1;
   display: flex; align-items: center; justify-content: center;
   gap: 8px;
   font-family: var(--font-mono);
@@ -558,21 +567,29 @@ header {
   text-decoration: none;
   color: var(--teal-dark);
   background: var(--cream2);
-  border-top: 1px solid var(--rule2);
   padding: 11px 16px;
   transition: all 0.18s;
 }
-
-.card-link:hover {
+.card-link-primary:hover {
   background: var(--navy);
   color: var(--lime-bright);
-  border-top-color: var(--navy);
 }
+.card-link-arrow { transition: transform 0.18s; }
+.card-link-primary:hover .card-link-arrow { transform: translateX(3px); }
 
-.card-link-arrow {
-  transition: transform 0.18s;
+.card-copy-btn {
+  width: 42px;
+  background: var(--cream3);
+  border: none;
+  border-left: 1px solid var(--rule2);
+  color: var(--ink4);
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.18s;
+  flex-shrink: 0;
 }
-.card-link:hover .card-link-arrow { transform: translateX(3px); }
+.card-copy-btn:hover { background: var(--cream4); color: var(--navy); }
+.card-copy-btn.copied { background: var(--pos-bg); color: var(--pos); border-left-color: var(--pos-border); }
 
 /* ─────────────────────────────── SKELETON ── */
 @keyframes shimmer {

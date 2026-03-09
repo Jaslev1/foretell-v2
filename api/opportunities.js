@@ -112,7 +112,7 @@ function scoreOpportunity(m, side, price, category, maxVol) {
 
   return {
     ticker: m.ticker,
-    eventTicker: m.event_ticker || m.ticker.split('-')[0],
+    eventTicker: m.event_ticker || m.ticker.split('-').slice(0,-1).join('-'),
     title: m.title || m.ticker,
     subtitle: m.subtitle || m.yes_sub_title || '',
     side,

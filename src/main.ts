@@ -60,8 +60,13 @@ function renderCard(opp: Opportunity, rank: number): string {
   const evDisplay = (opp.expectedValue > 0 ? '+' : '') + opp.expectedValue.toFixed(1) + '¢'
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
-  const eventBase = (opp.eventTicker || opp.ticker || '').split('-')[0].toLowerCase()
-  const kalshiUrl = `https://kalshi.com/markets/${eventBase}`
+  // Full event ticker = all segments except last outcome suffix (e.g. KXNBAGAME-26MAR08CHISAC not KXNBAGAME)
+  const tickerParts = (opp.eventTicker || opp.ticker || '').split('-')
+  const eventSlug = (opp.eventTicker
+    ? opp.eventTicker                                    // use event_ticker directly if available
+    : tickerParts.slice(0, -1).join('-')                 // else strip last segment
+  ).toLowerCase()
+  const kalshiUrl = `https://kalshi.com/markets/${eventSlug}`
   const volDisplay = opp.volume24h >= 1000000 ? (opp.volume24h/1000000).toFixed(1)+'M'
                    : opp.volume24h >= 1000 ? (opp.volume24h/1000).toFixed(0)+'k'
                    : opp.volume24h.toString()
@@ -105,9 +110,17 @@ function renderCard(opp: Opportunity, rank: number): string {
         ${scoreBar(opp.edgeScore)}
       </div>
     </div>
-    <a class="card-link" href="${kalshiUrl}" target="_blank" rel="noopener">
-      Trade on Kalshi <span class="card-link-arrow">→</span>
-    </a>
+    <div class="card-actions">
+      <a class="card-link-primary" href="${kalshiUrl}" target="_blank" rel="noopener">
+        Trade on Kalshi <span class="card-link-arrow">→</span>
+      </a>
+      <button class="card-copy-btn" data-ticker="${opp.ticker}" title="Copy ticker to search on Kalshi">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
   </div>`
 }
 
@@ -197,6 +210,18 @@ function updateStats(opps: Opportunity[], scanned: number) {
   set('stat-return', `${avgReturn.toFixed(1)}%`)
   set('stat-updated', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
 }
+
+// ── COPY TICKER HANDLER (delegated) ──────────────────────────────────
+document.addEventListener('click', (e) => {
+  const btn = (e.target as Element).closest('.card-copy-btn') as HTMLElement | null
+  if (!btn) return
+  const ticker = btn.dataset.ticker || ''
+  navigator.clipboard.writeText(ticker).then(() => {
+    btn.classList.add('copied')
+    btn.title = 'Copied!'
+    setTimeout(() => { btn.classList.remove('copied'); btn.title = 'Copy ticker to search on Kalshi' }, 1800)
+  })
+})
 
 // ── LOAD ───────────────────────────────────────────────────────────────
 async function loadOpportunities() {
