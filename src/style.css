@@ -464,23 +464,29 @@ header {
 /* ── Title ── */
 .outcome-label {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.70rem;
+  align-items: baseline;
+  gap: 7px;
+  font-size: 0.68rem;
   color: var(--ink3);
-  margin: 2px 0 14px;
+  margin: 3px 0 14px;
+  flex-wrap: wrap;
 }
 .outcome-label strong { color: var(--navy); font-weight: 600; }
-.outcome-side-tag {
+
+.outcome-action {
   font-family: var(--font-mono);
-  font-size: 0.50rem;
-  letter-spacing: 0.1em;
+  font-size: 0.58rem;
+  letter-spacing: 0.08em;
   font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 3px;
+  color: var(--teal-dark);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.tag-yes { background: rgba(146,190,63,0.15); color: #5A7A1F; }
-.tag-no  { background: rgba(200,80,80,0.10);  color: #8B3A3A; }
+
+.outcome-profit {
+  color: var(--ink3);
+  font-size: 0.68rem;
+}
 
 .card-title {
   font-family: var(--font-display);

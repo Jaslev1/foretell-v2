@@ -77,12 +77,17 @@ function renderCard(opp: Opportunity, rank: number): string {
         <span class="card-close">${formatClose(opp.daysToClose)}</span>
       </div>
       <h3 class="card-title">${opp.title}</h3>
-      ${(opp.side === 'YES' && opp.subtitle) || (opp.side === 'NO' && opp.noSubtitle)
+      ${(opp.subtitle || opp.noSubtitle)
           ? `<p class="card-subtitle outcome-label">
-              <span class="outcome-side-tag ${opp.side === 'YES' ? 'tag-yes' : 'tag-no'}">${opp.side}</span>
-              wins if: <strong>${opp.side === 'YES' ? opp.subtitle : (opp.noSubtitle || 'NOT ' + opp.subtitle)}</strong>
+              <span class="outcome-action">Buy ${opp.side} →</span>
+              <span class="outcome-profit">profit if <strong>${opp.side === 'YES'
+                ? (opp.subtitle || '—')
+                : (opp.noSubtitle || ('NOT: ' + opp.subtitle))
+              }</strong></span>
              </p>`
-          : ''}
+          : `<p class="card-subtitle outcome-label">
+               <span class="outcome-action">Buy ${opp.side}</span>
+             </p>`}
       <div class="card-metrics">
         <div class="metric">
           <span class="metric-label">Entry</span>

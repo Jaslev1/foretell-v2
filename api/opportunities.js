@@ -150,9 +150,14 @@ function scoreOpportunity(m, side, price, category, maxVol) {
     ticker: m.ticker,
     eventTicker,
     kalshiUrl,
-    title: m.title || m.ticker,
+    title: (() => {
+      const base = m.title || m.ticker
+      const series = (m.ticker || '').split('-')[0].toUpperCase()
+      const city = WEATHER_CITY[series]
+      return city ? `[${city}] ${base}` : base
+    })(),
     subtitle: m.subtitle || m.yes_sub_title || '',
-    noSubtitle: m.no_sub_title || '',
+    noSubtitle: m.no_sub_title || (m.subtitle || m.yes_sub_title ? `NOT: ${m.subtitle || m.yes_sub_title}` : ''),
     side,
     entryPrice: price,
     potentialReturn: Math.round(ret * 10) / 10,
