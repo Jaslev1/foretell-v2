@@ -77,7 +77,7 @@ function detectCategory(ticker: string, eventTicker: string, title: string): str
     combined.includes('GRAMMY') || combined.includes('OSCAR') ||
     combined.includes('EMMY') || combined.includes('GOLDEN GLOBE') ||
     combined.includes('BOX OFFICE') || combined.includes('ROTTEN TOMATOES') ||
-    combined.includes('SUPER BOWL AD') || combined.includes('ALBUM')
+    combined.includes('SUPER BOWL AD') || combined.includes('ALBUNSALES')
 
   const isPoliticalMention =
     (combined.includes('MENTION') || combined.includes('ATTEND') || combined.includes('APPEARANCE')) &&

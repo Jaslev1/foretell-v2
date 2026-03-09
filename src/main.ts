@@ -56,7 +56,8 @@ function renderCard(opp: ScoredOpportunity, rank: number): string {
   const ret = opp.potentialReturn.toFixed(1)
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
-  const kalshiUrl = `https://kalshi.com/markets/${opp.market.event_ticker.toLowerCase()}`
+  const eventBase = (opp.market.event_ticker || opp.market.ticker || '').split('-')[0].toLowerCase()
+  const kalshiUrl = `https://kalshi.com/markets/${eventBase}`
 
   return `
   <div class="opp-card">
