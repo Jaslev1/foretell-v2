@@ -462,6 +462,26 @@ header {
 }
 
 /* ── Title ── */
+.outcome-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.70rem;
+  color: var(--ink3);
+  margin: 2px 0 14px;
+}
+.outcome-label strong { color: var(--navy); font-weight: 600; }
+.outcome-side-tag {
+  font-family: var(--font-mono);
+  font-size: 0.50rem;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.tag-yes { background: rgba(146,190,63,0.15); color: #5A7A1F; }
+.tag-no  { background: rgba(200,80,80,0.10);  color: #8B3A3A; }
+
 .card-title {
   font-family: var(--font-display);
   font-weight: 400;
@@ -553,106 +573,78 @@ header {
 /* ── Card actions ── */
 .card-actions {
   border-top: 1px solid var(--rule2);
-  display: flex;
-  flex-direction: column;
-  gap: 0;
 }
 
-/* "Open Kalshi" button — takes you to kalshi.com/markets */
-.card-kalshi-btn {
-  display: flex; align-items: center; justify-content: center;
-  gap: 7px;
-  font-family: var(--font-mono);
-  font-size: 0.59rem;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  text-decoration: none;
-  color: var(--teal-dark);
-  background: var(--cream2);
-  border-bottom: 1px solid var(--rule2);
-  padding: 10px 16px;
-  transition: all 0.18s;
-}
-.card-kalshi-btn:hover {
-  background: var(--navy);
-  color: var(--lime-bright);
-}
-
-/* Search hint row */
-.card-search-hint {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  background: var(--cream);
-  min-height: 38px;
-  overflow: hidden;
-}
-
-.search-hint-label {
-  font-family: var(--font-mono);
-  font-size: 0.54rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink4);
-  padding: 0 10px;
-  white-space: nowrap;
-  flex-shrink: 0;
-  border-right: 1px solid var(--rule2);
-  height: 100%;
-  display: flex;
-  align-items: center;
-}
-
-/* Copy button — shows market title + clipboard icon */
 .card-copy-btn {
-  flex: 1;
-  background: transparent;
+  width: 100%;
+  background: var(--cream2);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 12px;
+  gap: 12px;
+  padding: 11px 16px;
   text-align: left;
   transition: background 0.15s;
-  min-width: 0;
   position: relative;
   overflow: hidden;
 }
-.card-copy-btn:hover { background: var(--cream2); }
+.card-copy-btn:hover { background: var(--cream3); }
 
-.copy-text {
+.copy-inner {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.copy-label {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink4);
+}
+
+.copy-value {
   font-family: var(--font-ui);
-  font-size: 0.66rem;
+  font-size: 0.70rem;
+  font-weight: 500;
   color: var(--navy);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex: 1;
 }
 
 .copy-icon {
   flex-shrink: 0;
-  color: var(--ink4);
-  transition: color 0.15s;
+  color: var(--teal-dark);
+  transition: color 0.15s, opacity 0.15s;
 }
 .card-copy-btn:hover .copy-icon { color: var(--navy); }
 
+/* Copied state */
 .copy-confirm {
   display: none;
-  position: absolute;
-  right: 10px;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: 0.58rem;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--pos);
   font-weight: 600;
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 
-.card-copy-btn.copied .copy-icon  { display: none; }
-.card-copy-btn.copied .copy-text  { color: var(--ink4); }
-.card-copy-btn.copied .copy-confirm { display: flex; align-items: center; }
 .card-copy-btn.copied { background: var(--pos-bg); }
+.card-copy-btn.copied .copy-icon { display: none; }
+.card-copy-btn.copied .copy-label { color: var(--pos); opacity: 0.7; }
+.card-copy-btn.copied .copy-value { color: var(--pos); opacity: 0.6; }
+.card-copy-btn.copied .copy-confirm { display: flex; }
 
 /* ─────────────────────────────── SKELETON ── */
 @keyframes shimmer {

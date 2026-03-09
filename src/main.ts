@@ -77,7 +77,12 @@ function renderCard(opp: Opportunity, rank: number): string {
         <span class="card-close">${formatClose(opp.daysToClose)}</span>
       </div>
       <h3 class="card-title">${opp.title}</h3>
-      ${opp.subtitle ? `<p class="card-subtitle">${opp.subtitle}</p>` : ''}
+      ${(opp.side === 'YES' && opp.subtitle) || (opp.side === 'NO' && opp.noSubtitle)
+          ? `<p class="card-subtitle outcome-label">
+              <span class="outcome-side-tag ${opp.side === 'YES' ? 'tag-yes' : 'tag-no'}">${opp.side}</span>
+              wins if: <strong>${opp.side === 'YES' ? opp.subtitle : (opp.noSubtitle || 'NOT ' + opp.subtitle)}</strong>
+             </p>`
+          : ''}
       <div class="card-metrics">
         <div class="metric">
           <span class="metric-label">Entry</span>
@@ -106,23 +111,22 @@ function renderCard(opp: Opportunity, rank: number): string {
       </div>
     </div>
     <div class="card-actions">
-      <a class="card-kalshi-btn" href="https://kalshi.com/markets" target="_blank" rel="noopener">
-        Open Kalshi
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0">
-          <path d="M2 8L8 2M8 2H4M8 2V6" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <button class="card-copy-btn" data-copy="${opp.searchText || opp.title}">
+        <div class="copy-inner">
+          <span class="copy-label">Copy to find on Kalshi</span>
+          <span class="copy-value">${opp.searchText || opp.title}</span>
+        </div>
+        <svg class="copy-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <rect x="4" y="4" width="8" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
-      </a>
-      <div class="card-search-hint">
-        <span class="search-hint-label">Search Kalshi for:</span>
-        <button class="card-copy-btn" data-copy="${opp.title}" data-ticker="${opp.ticker}">
-          <span class="copy-text">"${opp.title}"</span>
-          <svg class="copy-icon" width="12" height="12" viewBox="0 0 13 13" fill="none">
-            <rect x="4" y="4" width="8" height="8" rx="1" stroke="currentColor" stroke-width="1.3"/>
-            <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <span class="copy-confirm">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 7l3.5 3.5L11 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span class="copy-confirm">✓ Copied</span>
-        </button>
-      </div>
+          Copied — paste into Kalshi search
+        </span>
+      </button>
     </div>
   </div>`
 }

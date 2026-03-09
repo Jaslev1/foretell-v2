@@ -42,7 +42,16 @@ function detectCategory(ticker, eventTicker, title) {
       combined.includes('AFCCL') || combined.includes('DPWORLDTOUR'))
     return null
 
-  // Categorise
+  // Categorise — economics FIRST to avoid false Sports hits
+  if (combined.includes('KXCPI') || combined.includes('KXGDP') || combined.includes('KXPAYROLL') ||
+      combined.includes('KXU3') || combined.includes('KXEOWEEK') || combined.includes('KXRT-') ||
+      combined.includes('FOMC') || combined.includes('KXPCE') || combined.includes('PCE') ||
+      combined.includes('INFLATION') || combined.includes('UNEMPLOYMENT') || combined.includes('JOBLESS') ||
+      combined.includes('TREASURY') || combined.includes('KXGOVT') || combined.includes('KXFED') ||
+      combined.includes('KXNFP') || combined.includes('KXISM') || combined.includes('KXHOUSING') ||
+      combined.includes('KXRETAIL') || combined.includes('KXDEBT') || combined.includes('KXDEFICIT') ||
+      combined.includes('KXCORE'))
+    return 'Economics'
   if (combined.includes('NBA') || combined.includes('NHL') || combined.includes('NCAA') ||
       combined.includes('WBC') || combined.includes('NFL') || combined.includes('MLB') ||
       combined.includes('WNBA') || combined.includes('PGA') || combined.includes('GOLF') ||
@@ -51,11 +60,7 @@ function detectCategory(ticker, eventTicker, title) {
       combined.includes('VALORANT') || combined.includes('WOHOCKEY') || combined.includes('WOMHOCKEY') ||
       combined.includes('WOFSKATE') || combined.includes('WOSKIMTN') || combined.includes('NBLGAME'))
     return 'Sports'
-  if (combined.includes('KXCPI') || combined.includes('KXGDP') || combined.includes('KXPAYROLL') ||
-      combined.includes('KXU3') || combined.includes('KXEOWEEK') || combined.includes('KXRT-') ||
-      combined.includes('FOMC') || combined.includes('INFLATION') || combined.includes('UNEMPLOYMENT') ||
-      combined.includes('JOBLESS') || combined.includes('TREASURY') || combined.includes('KXGOVT'))
-    return 'Economics'
+
   if (combined.includes('KXBTC') || combined.includes('KXETH') || combined.includes('KXGOLD') ||
       combined.includes('KXWTI') || combined.includes('BITCOIN') || combined.includes('ETHEREUM') ||
       combined.includes('CRYPTO') || combined.includes('KXGOLDMON'))
@@ -85,6 +90,34 @@ function getPrice(intVal, dollarStr) {
 function daysUntil(isoDate) {
   if (!isoDate) return 999
   return Math.max(0, (new Date(isoDate).getTime() - Date.now()) / 86400000)
+}
+
+
+// Weather series → city name
+const WEATHER_CITY = {
+  KXHIGHNY:'New York', KXHIGHLA:'Los Angeles', KXHIGHCHI:'Chicago',
+  KXHIGHMIA:'Miami', KXHIGHSF:'San Francisco', KXHIGHDAL:'Dallas',
+  KXHIGHHOU:'Houston', KXHIGHPHX:'Phoenix', KXHIGHSEA:'Seattle',
+  KXHIGHDEN:'Denver', KXHIGHBOS:'Boston', KXHIGHATL:'Atlanta',
+  KXLOWNY:'New York', KXLOWCHI:'Chicago', KXLOWBOS:'Boston',
+  KXSNOWNY:'New York', KXSNOWCHI:'Chicago', KXSNOWBOS:'Boston',
+  KXRAINNY:'New York', KXRAINLA:'Los Angeles',
+}
+
+function buildSearchText(m, side) {
+  const ticker = m.ticker || ''
+  const title = m.title || ticker
+  const series = ticker.split('-')[0].toUpperCase()
+
+  // Weather: prepend city name if missing
+  if (WEATHER_CITY[series]) {
+    return `${WEATHER_CITY[series]}: ${title}`
+  }
+
+  // Sports spread/total: Kalshi search works best with the event title
+  // e.g. "Charlotte at Phoenix" rather than the strike variant "Charlotte wins by over 9.5"
+  // Use event_ticker derived title when available, fall back to market title
+  return title
 }
 
 function scoreOpportunity(m, side, price, category, maxVol) {
@@ -119,6 +152,7 @@ function scoreOpportunity(m, side, price, category, maxVol) {
     kalshiUrl,
     title: m.title || m.ticker,
     subtitle: m.subtitle || m.yes_sub_title || '',
+    noSubtitle: m.no_sub_title || '',
     side,
     entryPrice: price,
     potentialReturn: Math.round(ret * 10) / 10,
@@ -131,6 +165,7 @@ function scoreOpportunity(m, side, price, category, maxVol) {
     category,
     rationale,
     closeTime: m.close_time || m.expiration_time || '',
+    searchText: buildSearchText(m, side),
   }
 }
 
