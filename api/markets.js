@@ -9,10 +9,8 @@ export default async function handler(req, res) {
 
     const url = new URL('https://api.elections.kalshi.com/trade-api/v2/markets')
     url.searchParams.set('limit', limit)
-    // Kalshi uses "active" not "open" for tradeable markets
+    // Kalshi uses "active" for tradeable markets
     url.searchParams.set('status', 'active')
-    // Exclude multi-leg parlay combos — they have no standalone pricing
-    url.searchParams.set('mve_filter', 'exclude')
     if (cursor) url.searchParams.set('cursor', cursor)
 
     const upstream = await fetch(url.toString(), {
@@ -20,16 +18,22 @@ export default async function handler(req, res) {
     })
 
     if (!upstream.ok) {
-      return res.status(upstream.status).json({ error: `Kalshi API returned ${upstream.status}` })
+      const body = await upstream.text()
+      return res.status(upstream.status).json({ error: `Kalshi ${upstream.status}: ${body.slice(0,200)}` })
     }
 
     const raw = await upstream.json()
 
-    // Secondary filter server-side: drop zero-price and zero-volume markets
-    const markets = (raw.markets || []).filter(m =>
-      (m.yes_ask > 0 || parseFloat(m.yes_ask_dollars || '0') > 0 ||
-       m.no_ask  > 0 || parseFloat(m.no_ask_dollars  || '0') > 0)
-    )
+    // Filter out MVE parlay combos (ticker contains hash-like segments) and zero-price markets
+    const markets = (raw.markets || []).filter(m => {
+      // Drop multi-leg cross-category combos — they have random hash tickers and no pricing
+      if (m.ticker && m.ticker.includes('CROSSCATEGORY')) return false
+      // Must have at least one tradeable side
+      const hasPrice =
+        (m.yes_ask > 0) || (parseFloat(m.yes_ask_dollars || '0') > 0) ||
+        (m.no_ask  > 0) || (parseFloat(m.no_ask_dollars  || '0') > 0)
+      return hasPrice
+    })
 
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60')
     res.status(200).json({ markets, cursor: raw.cursor || '' })
