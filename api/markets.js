@@ -9,8 +9,7 @@ export default async function handler(req, res) {
 
     const url = new URL('https://api.elections.kalshi.com/trade-api/v2/markets')
     url.searchParams.set('limit', limit)
-    // Kalshi uses "active" for tradeable markets
-    url.searchParams.set('status', 'active')
+    url.searchParams.set('status', 'open')   // "open" is the valid param; API returns "active" markets
     if (cursor) url.searchParams.set('cursor', cursor)
 
     const upstream = await fetch(url.toString(), {
@@ -24,15 +23,18 @@ export default async function handler(req, res) {
 
     const raw = await upstream.json()
 
-    // Filter out MVE parlay combos (ticker contains hash-like segments) and zero-price markets
+    // Filter out:
+    // 1. MVE multi-leg parlay combos (CROSSCATEGORY, MVESPORTS etc.) — zero pricing, no standalone value
+    // 2. Markets with no tradeable ask on either side
     const markets = (raw.markets || []).filter(m => {
-      // Drop multi-leg cross-category combos — they have random hash tickers and no pricing
-      if (m.ticker && m.ticker.includes('CROSSCATEGORY')) return false
-      // Must have at least one tradeable side
-      const hasPrice =
-        (m.yes_ask > 0) || (parseFloat(m.yes_ask_dollars || '0') > 0) ||
-        (m.no_ask  > 0) || (parseFloat(m.no_ask_dollars  || '0') > 0)
-      return hasPrice
+      if (!m.ticker) return false
+      if (m.ticker.includes('CROSSCATEGORY')) return false
+      if (m.ticker.includes('MVESPORTS')) return false
+      if (m.ticker.includes('MVECROSS')) return false
+      const yesAsk = m.yes_ask > 0 ? m.yes_ask : Math.round(parseFloat(m.yes_ask_dollars || '0') * 100)
+      const noAsk  = m.no_ask  > 0 ? m.no_ask  : Math.round(parseFloat(m.no_ask_dollars  || '0') * 100)
+      // Must have a real ask between 1–99 on at least one side
+      return (yesAsk >= 1 && yesAsk <= 99) || (noAsk >= 1 && noAsk <= 99)
     })
 
     res.setHeader('Cache-Control', 's-maxage=300, stale-while-revalidate=60')
