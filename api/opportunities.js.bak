@@ -108,59 +108,15 @@ function buildSearchText(m, side) {
   const ticker = m.ticker || ''
   const title = m.title || ticker
   const series = ticker.split('-')[0].toUpperCase()
-  const eventTicker = (m.event_ticker || '').toUpperCase()
 
-  // ── WEATHER ──────────────────────────────────────────────────────────
-  // Kalshi weather search works with: "[City] high temperature" or "[City] low temperature"
-  // e.g. "Los Angeles high temperature", "Seattle low temperature"
+  // Weather: prepend city name if missing
   if (WEATHER_CITY[series]) {
-    const city = WEATHER_CITY[series]
-    const stat = series.startsWith('KXLOW')  ? 'low temperature'
-               : series.startsWith('KXHIGH') ? 'high temperature'
-               : series.startsWith('KXSNOW') ? 'snowfall'
-               : series.startsWith('KXRAIN') ? 'rainfall'
-               : 'temperature'
-    return `${city} ${stat}`
+    return `${WEATHER_CITY[series]}: ${title}`
   }
 
-  // ── SPORTS TOTALS ─────────────────────────────────────────────────────
-  // ticker pattern: KXNCAAMBTOTAL-... or KXNBATOTAL-... etc.
-  // title = "Oregon St. at Gonzaga: Total Points" — drop ": Total Points"
-  // Kalshi search: just the team matchup, e.g. "Oregon St Gonzaga"
-  if (series.includes('TOTAL')) {
-    return title
-      .replace(/:\s*Total Points.*$/i, '')   // drop ": Total Points"
-      .replace(/[?.]/g, '')                   // strip punctuation
-      .trim()
-  }
-
-  // ── SPORTS SPREADS ────────────────────────────────────────────────────
-  // title = "Oklahoma City wins by over 5.5 Points?" — just want team names
-  // Extract teams from event ticker: KXNBASPREAD-26MAR09DENOKC → "DEN OKC"
-  // Better: use the title up to "wins by" or "by over"
-  if (series.includes('SPREAD') || series.includes('1HSPREAD') || series.includes('2HSPREAD')) {
-    // Strip the spread description, keep team names
-    return title
-      .replace(/^Will\s+/i, '')             // "Will OKC win..." → "OKC win..."
-      .replace(/\s+(wins?|win)\s+.*/i, '')  // "OKC wins by over..." → "OKC"
-      .replace(/\s+by\s+over\s+.*/i, '')    // fallback
-      .replace(/\s+(the\s+)?(1H|2H|half).*/i, '') // "...win the 1H by..." → clip
-      .replace(/[?.]/g, '')
-      .trim()
-  }
-
-  // ── SPORTS 2H/HALF WINNERS ────────────────────────────────────────────
-  // title = "Denver vs Oklahoma City: Second Half Winner?" → strip suffix
-  if (series.includes('2HWINNER') || series.includes('1HWINNER')) {
-    return title
-      .replace(/:\s*(Second|First)\s+Half\s+Winner\??$/i, '')
-      .replace(/[?]/g, '')
-      .trim()
-  }
-
-  // ── DEFAULT ───────────────────────────────────────────────────────────
-  // For winner markets and everything else, title is already fine
-  // e.g. "Ottawa at Vancouver Winner?" — Kalshi finds this easily
+  // Sports spread/total: Kalshi search works best with the event title
+  // e.g. "Charlotte at Phoenix" rather than the strike variant "Charlotte wins by over 9.5"
+  // Use event_ticker derived title when available, fall back to market title
   return title
 }
 

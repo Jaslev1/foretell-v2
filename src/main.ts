@@ -366,20 +366,27 @@ function renderCard(opp: Opportunity, rank: number): string {
 
     <!-- Actions footer — belongs to THIS card, separated visually -->
     <div class="card-actions">
-      <button class="card-copy-btn" data-copy="${searchStr}">
-        <div class="copy-inner">
-          <span class="copy-label">Copy to find on Kalshi</span>
-          <span class="copy-value">${searchStr}</span>
-        </div>
+
+      <!-- Primary: direct link to exact Kalshi market page -->
+      <a class="card-kalshi-link" href="${opp.kalshiUrl}" target="_blank" rel="noopener">
+        Open on Kalshi
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+          <path d="M2 9L9 2M9 2H4M9 2V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </a>
+
+      <!-- Secondary: copy search string as fallback -->
+      <button class="card-copy-btn" data-copy="${searchStr}" title="Copy search term to find on Kalshi">
+        <span class="copy-label-short">Copy search</span>
         <svg class="copy-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
           <rect x="4" y="4" width="8" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
           <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
         <span class="copy-confirm">
-          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-            <path d="M2 7l3.5 3.5L11 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M2 6.5l3 3L10 2.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          Copied — paste into Kalshi search
+          Copied!
         </span>
       </button>
 
@@ -620,6 +627,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <p>
           <strong>YES pill</strong> = buy YES on Kalshi &nbsp;·&nbsp; <strong>NO pill</strong> = buy NO on Kalshi<br>
           On winner markets: clicking NO means you're backing the named team/player<br>
+          <strong>Open on Kalshi →</strong> goes directly to the exact market page<br>
           <strong>Foretell score</strong> = composite edge 0–90 (EV + price band + liquidity + spread + horizon)<br>
           <strong>Risk 1–10</strong> = 1 very safe · 10 very risky
         </p>
