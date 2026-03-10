@@ -117,45 +117,71 @@ function buildBetInstruction(opp: Opportunity): { why: string; how: string; howC
   // For NO bets:  winning outcome = noSubtitle (what you're actually backing)
   const winOutcome = side === 'YES' ? sub : noSub
 
-  // ── WEATHER BAND bets ──
+  // ── WEATHER bets ──
+  // subtitle = yes_sub_title from Kalshi, e.g. "67° to 68°", "73° or above", "85° or below"
+  // For NO bets: Foretell is saying the YES outcome WON'T happen.
   if (cat === 'Weather') {
-    const isTempBand = /\d+°?\s*(to|-|–)\s*\d+°/.test(sub) || /\d+°?\s*(to|-|–)\s*\d+°/.test(title)
-    const isAbove    = /above|or above|or higher/i.test(sub + title)
-    const isBelow    = /below|or below|or lower/i.test(sub + title)
-    const stat       = /minimum|low/i.test(title) ? 'low' : 'high'
+    const isBand     = /\d+°?\s*(to|-|–)\s*\d+°/.test(sub)
+    const isAbove    = /or above|or higher/i.test(sub)
+    const isBelow    = /or below|or lower/i.test(sub)
+    const stat       = /minimum|low temp/i.test(title) ? 'low' : 'high'
     const cityStr    = city ? ` in ${city}` : ''
 
-    if (side === 'YES' && (isTempBand || sub)) {
-      return {
-        why: `Foretell expects the ${stat}${cityStr} to land in this range.`,
-        how: `Bet on the ${sub || winOutcome} band — click YES`,
-        howColor: 'yes',
+    if (side === 'YES') {
+      if (isBand) {
+        return {
+          why: `Foretell expects the ${stat}${cityStr} to land in the ${sub} range.`,
+          how: `Bet on the ${sub} band — click YES`,
+          howColor: 'yes',
+        }
       }
-    }
-    if (side === 'YES' && isAbove) {
+      if (isAbove) {
+        return {
+          why: `Foretell expects the ${stat}${cityStr} to reach ${sub}.`,
+          how: `Bet on "${sub}" — click YES`,
+          howColor: 'yes',
+        }
+      }
+      if (isBelow) {
+        return {
+          why: `Foretell expects the ${stat}${cityStr} to stay ${sub}.`,
+          how: `Bet on "${sub}" — click YES`,
+          howColor: 'yes',
+        }
+      }
+      // Generic YES
       return {
-        why: `Foretell expects the ${stat}${cityStr} to be at or above this threshold.`,
+        why: `Foretell expects the ${stat}${cityStr} outcome: ${sub}.`,
         how: `Bet on "${sub}" — click YES`,
         howColor: 'yes',
       }
     }
-    if (side === 'YES' && isBelow) {
+
+    // ── NO side: Foretell says the YES outcome (subtitle) WON'T happen ──
+    if (isBand) {
       return {
-        why: `Foretell expects the ${stat}${cityStr} to stay at or below this threshold.`,
-        how: `Bet on "${sub}" — click YES`,
-        howColor: 'yes',
+        why: `Foretell expects the ${stat}${cityStr} NOT to land in the ${sub} range.`,
+        how: `Click NO on the "${sub}" row`,
+        howColor: 'no',
       }
     }
-    if (side === 'NO' && noSub) {
+    if (isAbove) {
       return {
-        why: `Foretell expects the ${stat}${cityStr} to land in this range.`,
-        how: `Bet on the ${noSub} band — click YES on that row`,
-        howColor: 'yes',
+        why: `Foretell expects the ${stat}${cityStr} to stay below ${sub.replace(/or above|or higher/i, '').trim()}.`,
+        how: `Click NO on the "${sub}" row`,
+        howColor: 'no',
       }
     }
-    // NO side, band — the NO means "NOT the subtitle band"
+    if (isBelow) {
+      return {
+        why: `Foretell expects the ${stat}${cityStr} to stay above ${sub.replace(/or below|or lower/i, '').trim()}.`,
+        how: `Click NO on the "${sub}" row`,
+        howColor: 'no',
+      }
+    }
+    // Generic NO
     return {
-      why: `Foretell expects the ${stat}${cityStr} NOT to land in "${sub}".`,
+      why: `Foretell expects the ${stat}${cityStr} NOT to be: ${sub}.`,
       how: `Click NO on the "${sub}" row`,
       howColor: 'no',
     }
@@ -364,20 +390,15 @@ function renderCard(opp: Opportunity, rank: number): string {
 
     </div><!-- /card-body -->
 
-    <!-- Actions footer — belongs to THIS card, separated visually -->
+    <!-- Actions footer -->
     <div class="card-actions">
 
-      <!-- Primary: direct link to exact Kalshi market page -->
-      <a class="card-kalshi-link" href="${opp.kalshiUrl}" target="_blank" rel="noopener">
-        Open on Kalshi
-        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-          <path d="M2 9L9 2M9 2H4M9 2V7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </a>
-
-      <!-- Secondary: copy search string as fallback -->
-      <button class="card-copy-btn" data-copy="${searchStr}" title="Copy search term to find on Kalshi">
-        <span class="copy-label-short">Copy search</span>
+      <!-- Copy search string — styled navy/lime, full width -->
+      <button class="card-copy-btn" data-copy="${searchStr}">
+        <div class="copy-inner">
+          <span class="copy-label">Copy to search on Kalshi</span>
+          <span class="copy-value">${searchStr}</span>
+        </div>
         <svg class="copy-icon" width="13" height="13" viewBox="0 0 13 13" fill="none">
           <rect x="4" y="4" width="8" height="8" rx="1.2" stroke="currentColor" stroke-width="1.3"/>
           <path d="M1 9V2a1 1 0 0 1 1-1h7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -627,8 +648,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <p>
           <strong>YES pill</strong> = buy YES on Kalshi &nbsp;·&nbsp; <strong>NO pill</strong> = buy NO on Kalshi<br>
           On winner markets: clicking NO means you're backing the named team/player<br>
-          <strong>Open on Kalshi →</strong> goes directly to the exact market page<br>
-          <strong>Foretell score</strong> = composite edge 0–90 (EV + price band + liquidity + spread + horizon)<br>
+<strong>Foretell score</strong> = composite edge 0–90 (EV + price band + liquidity + spread + horizon)<br>
           <strong>Risk 1–10</strong> = 1 very safe · 10 very risky
         </p>
       </div>

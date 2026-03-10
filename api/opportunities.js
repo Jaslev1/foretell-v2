@@ -93,15 +93,49 @@ function daysUntil(isoDate) {
 }
 
 
-// Weather series → city name
-const WEATHER_CITY = {
-  KXHIGHNY:'New York', KXHIGHLA:'Los Angeles', KXHIGHCHI:'Chicago',
-  KXHIGHMIA:'Miami', KXHIGHSF:'San Francisco', KXHIGHDAL:'Dallas',
-  KXHIGHHOU:'Houston', KXHIGHPHX:'Phoenix', KXHIGHSEA:'Seattle',
-  KXHIGHDEN:'Denver', KXHIGHBOS:'Boston', KXHIGHATL:'Atlanta',
-  KXLOWNY:'New York', KXLOWCHI:'Chicago', KXLOWBOS:'Boston',
-  KXSNOWNY:'New York', KXSNOWCHI:'Chicago', KXSNOWBOS:'Boston',
-  KXRAINNY:'New York', KXRAINLA:'Los Angeles',
+// Weather city lookup — keyed by city code after stripping KXHIGH/KXLOW/KXSNOW/KXRAIN prefix
+// Handles all ticker variants: KXHIGHCHI, KXHIGHTCHI, KXLOWTMIA, KXLOWTLAX, KXHIGHTSFO etc.
+// The 'T' in some tickers (e.g. KXHIGHTCHI vs KXHIGHCHI) is a station variant; same city.
+const WEATHER_CITY_MAP = {
+  NY:'New York', NYC:'New York',
+  LA:'Los Angeles', LAX:'Los Angeles',
+  CHI:'Chicago',
+  MIA:'Miami',
+  SF:'San Francisco', SFO:'San Francisco',
+  DAL:'Dallas',
+  HOU:'Houston',
+  PHX:'Phoenix',
+  SEA:'Seattle',
+  DEN:'Denver',
+  BOS:'Boston',
+  ATL:'Atlanta',
+  OKC:'Oklahoma City',
+  LV:'Las Vegas',
+  PDX:'Portland',
+  MSP:'Minneapolis',
+  STL:'St. Louis',
+  CLE:'Cleveland',
+  DCA:'Washington DC', DC:'Washington DC',
+  MKE:'Milwaukee',
+  PIT:'Pittsburgh',
+  ORD:'Chicago',
+}
+
+function getWeatherCity(series) {
+  // Strip the leading weather-type prefix to get the city code
+  const code = series
+    .replace(/^KXHIGHT/, '')   // KXHIGHTSFO → SFO
+    .replace(/^KXHIGH/,  '')   // KXHIGHCHI  → CHI
+    .replace(/^KXLOWT/,  '')   // KXLOWTMIA  → MIA
+    .replace(/^KXLOW/,   '')   // KXLOWNY    → NY
+    .replace(/^KXSNOW/,  '')   // KXSNOWCHI  → CHI
+    .replace(/^KXRAIN/,  '')   // KXRAINLA   → LA
+  return WEATHER_CITY_MAP[code] || null
+}
+
+function isWeatherSeries(series) {
+  return series.startsWith('KXHIGH') || series.startsWith('KXLOW') ||
+         series.startsWith('KXSNOW') || series.startsWith('KXRAIN')
 }
 
 function buildSearchText(m, side) {
@@ -113,14 +147,14 @@ function buildSearchText(m, side) {
   // ── WEATHER ──────────────────────────────────────────────────────────
   // Kalshi weather search works with: "[City] high temperature" or "[City] low temperature"
   // e.g. "Los Angeles high temperature", "Seattle low temperature"
-  if (WEATHER_CITY[series]) {
-    const city = WEATHER_CITY[series]
+  if (isWeatherSeries(series)) {
+    const city = getWeatherCity(series)
     const stat = series.startsWith('KXLOW')  ? 'low temperature'
                : series.startsWith('KXHIGH') ? 'high temperature'
                : series.startsWith('KXSNOW') ? 'snowfall'
                : series.startsWith('KXRAIN') ? 'rainfall'
                : 'temperature'
-    return `${city} ${stat}`
+    return city ? `${city} ${stat}` : title
   }
 
   // ── SPORTS TOTALS ─────────────────────────────────────────────────────
@@ -197,7 +231,7 @@ function scoreOpportunity(m, side, price, category, maxVol) {
     title: (() => {
       const base = m.title || m.ticker
       const series = (m.ticker || '').split('-')[0].toUpperCase()
-      const city = WEATHER_CITY[series]
+      const city = getWeatherCity(series)
       return city ? `[${city}] ${base}` : base
     })(),
     subtitle: m.subtitle || m.yes_sub_title || '',
