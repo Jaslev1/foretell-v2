@@ -459,7 +459,21 @@ function renderEmpty(): string {
 let allOpps: Opportunity[] = []
 let activeCategory = 'All'
 let sortBy: 'score' | 'return' | 'prob' | 'close' = 'score'
-const placedSet = new Set<string>()
+
+// ── PERSISTENT PLACED SET ─────────────────────────────────────────────
+// Survives page refreshes and code deployments via localStorage.
+// Stored as a JSON array of ticker strings under key 'foretell:placed'.
+const PLACED_KEY = 'foretell:placed'
+function loadPlaced(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PLACED_KEY)
+    return raw ? new Set(JSON.parse(raw)) : new Set()
+  } catch { return new Set() }
+}
+function savePlaced(s: Set<string>): void {
+  try { localStorage.setItem(PLACED_KEY, JSON.stringify([...s])) } catch {}
+}
+const placedSet: Set<string> = loadPlaced()
 
 function getFiltered(): Opportunity[] {
   let list = activeCategory === 'All' ? allOpps : allOpps.filter(o => o.category === activeCategory)
@@ -539,6 +553,7 @@ document.addEventListener('click', (e) => {
       placedSet.add(ticker)
       card.classList.add('is-placed')
     }
+    savePlaced(placedSet)  // persist immediately after every toggle
   }
 })
 

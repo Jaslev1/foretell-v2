@@ -380,6 +380,23 @@ export default async function handler(req, res) {
       // 88-93¢ markets have <13% upside. After spreading costs + model error,
       // they're not attractive unless EV is strong. Allow them but score them down.
       // Min vol raised to 50 (was effectively 5) to exclude ghost markets.
+      // ── Weather timing gate ──────────────────────────────────────────────
+      // Temperature/weather markets for date X open on Kalshi at ~9pm ET on date X-1.
+      // Before that they don't exist on the platform yet, so we must not surface them.
+      // Rule: weather markets with 1.0–1.7 days to close are only shown after 21:00 ET.
+      // Markets closing in <1.0 day are definitely live. Markets >1.7 days out are excluded.
+      if (category === 'Weather') {
+        const days = daysUntil(m.close_time || m.expiration_time)
+        if (days > 1.7) continue   // too far out — won't be on Kalshi yet
+        if (days >= 1.0) {
+          // "Tomorrow" markets — only show after 9pm ET when Kalshi publishes them
+          const etHour = parseInt(
+            new Date().toLocaleString('en-US', { timeZone: 'America/New_York', hour: 'numeric', hour12: false })
+          )
+          if (etHour < 21) continue
+        }
+      }
+
       if (ya >= 65 && ya <= 93 && (m.volume_24h||m.volume||0) >= 50)
         candidates.push({ m, side: 'YES', price: ya, category })
       if (na >= 65 && na <= 93 && (m.volume_24h||m.volume||0) >= 50)
