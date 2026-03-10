@@ -24,51 +24,43 @@ interface Opportunity {
 
 // ── CATEGORY COLOURS — Prosper & Partners palette ──
 const CAT_STYLE: Record<string, { text: string; bg: string; border: string }> = {
-  Sports:       { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
-  Economics:    { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
-  Politics:     { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
-  Weather:      { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
-  Commodities:  { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
-  Markets:      { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
-  Entertainment:{ text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)',  border: 'rgba(90,122,31,0.28)' },
-  General:      { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
+  Sports:        { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  Economics:     { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  Politics:      { text: '#4B4137', bg: 'rgba(75,65,55,0.07)',    border: 'rgba(75,65,55,0.24)' },
+  Weather:       { text: '#557A72', bg: 'rgba(85,122,114,0.08)',  border: 'rgba(85,122,114,0.28)' },
+  Commodities:   { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
+  Markets:       { text: '#434371', bg: 'rgba(67,67,113,0.08)',   border: 'rgba(67,67,113,0.28)' },
+  Entertainment: { text: '#5A7A1F', bg: 'rgba(90,122,31,0.08)',  border: 'rgba(90,122,31,0.28)' },
+  General:       { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' },
 }
 const defaultCat = { text: '#817A73', bg: 'rgba(129,122,115,0.07)', border: 'rgba(129,122,115,0.24)' }
 function catStyle(cat: string) { return CAT_STYLE[cat] || defaultCat }
 
-// ── RISK RATING 1-10 ──
+// ── RISK RATING 1–10 ──────────────────────────────────────────────────
 function getRisk(opp: Opportunity): number {
-  const p = opp.impliedProb * 100
+  let risk = 5
   const ev = opp.expectedValue
   const vol = opp.volume24h
   const days = opp.daysToClose
 
-  let risk = 5
-  // EV drives risk most: negative EV = riskier
-  if (ev < 0)  risk += 3
+  if (ev < 0)       risk += 3
   else if (ev < 5)  risk += 1
   else if (ev > 15) risk -= 1
 
-  // Low volume = more uncertain
-  if (vol < 50)   risk += 2
-  else if (vol < 200) risk += 1
+  if (vol < 50)        risk += 2
+  else if (vol < 200)  risk += 1
   else if (vol > 5000) risk -= 1
 
-  // More days = more overnight uncertainty
-  if (days > 7) risk += 1
+  if (days > 7)  risk += 1
   if (days > 14) risk += 1
 
-  // Category modifiers
   if (opp.category === 'Economics' || opp.category === 'Weather') risk -= 1
-  if (opp.category === 'Politics') risk += 1
+  if (opp.category === 'Politics')    risk += 1
   if (opp.category === 'Commodities') risk += 2
-
-  // Wide spread = more risk
   if (opp.spread > 6) risk += 1
 
   return Math.max(1, Math.min(10, Math.round(risk)))
 }
-
 function riskLabel(r: number): string {
   if (r <= 2) return 'Very Low'
   if (r <= 4) return 'Low'
@@ -76,7 +68,6 @@ function riskLabel(r: number): string {
   if (r <= 8) return 'High'
   return 'Very High'
 }
-
 function riskColor(r: number): string {
   if (r <= 2) return '#5A7A1F'
   if (r <= 4) return '#7A9C20'
@@ -84,7 +75,6 @@ function riskColor(r: number): string {
   if (r <= 8) return '#B84C14'
   return '#8C1C08'
 }
-
 function renderRisk(opp: Opportunity): string {
   const r = getRisk(opp)
   const col = riskColor(r)
@@ -99,125 +89,190 @@ function renderRisk(opp: Opportunity): string {
   </div>`
 }
 
-// ── PLAIN-ENGLISH BET INSTRUCTION ──
-// Builds a clear human directive: what to bet on and which band/outcome to pick
+// ── BET INSTRUCTION ────────────────────────────────────────────────────
+// Builds a consistent two-line action block:
+//   Line 1 (why): plain sentence from Foretell
+//   Line 2 (how): exact click instruction
+//
+// Source data from opportunities.js:
+//   subtitle    = yes_sub_title  e.g. "67° to 68°", "Memphis", "Above 2.5%"
+//   noSubtitle  = no_sub_title   e.g. "NOT: Memphis" or derived
+//   side        = 'YES' | 'NO'
+//   title       = full Kalshi question title
+//   category    = Weather / Sports / Economics / Commodities / ...
 
-function buildBetInstruction(opp: Opportunity): { instruction: string; directive: string } {
-  const title = opp.title || ''
-  const subtitle = opp.subtitle || ''
-  const noSubtitle = opp.noSubtitle || ''
-  const side = opp.side
+function buildBetInstruction(opp: Opportunity): { why: string; how: string; howColor: 'yes' | 'no' } {
+  const title    = opp.title || ''
+  const sub      = (opp.subtitle || '').replace(/^NOT:\s*/i, '').trim()
+  const noSub    = (opp.noSubtitle || '').replace(/^NOT:\s*/i, '').trim()
+  const side     = opp.side
+  const cat      = opp.category
 
-  // Extract city prefix from "[City] ..." pattern
+  // ── Extract city from [City] prefix ──
   const cityMatch = title.match(/^\[([^\]]+)\]/)
   const city = cityMatch ? cityMatch[1] : null
 
-  // Is this a temperature/weather band bet?
-  const isTempBand = /\d+[–\-]\d+°/.test(title) || /\d+[–\-]\d+°/.test(subtitle)
-  const isGteBand  = />?\d+°\s*(or above|or higher)/i.test(title + subtitle)
-  const isLteBand  = /<?\d+°\s*(or below|or lower)/i.test(title + subtitle)
+  // ── What is the winning outcome for this side? ──
+  // For YES bets: winning outcome = subtitle
+  // For NO bets:  winning outcome = noSubtitle (what you're actually backing)
+  const winOutcome = side === 'YES' ? sub : noSub
 
-  // Is this a winner/outcome bet?
-  const isWinner = /winner/i.test(title) || /wins/i.test(title) || /win the/i.test(title)
+  // ── WEATHER BAND bets ──
+  if (cat === 'Weather') {
+    const isTempBand = /\d+°?\s*(to|-|–)\s*\d+°/.test(sub) || /\d+°?\s*(to|-|–)\s*\d+°/.test(title)
+    const isAbove    = /above|or above|or higher/i.test(sub + title)
+    const isBelow    = /below|or below|or lower/i.test(sub + title)
+    const stat       = /minimum|low/i.test(title) ? 'low' : 'high'
+    const cityStr    = city ? ` in ${city}` : ''
 
-  // Is it a price/value band bet (crypto, indices)?
-  const isPriceBand = /\$[\d,]+\s*(or above|or higher|or below|or lower)/i.test(title + subtitle)
-  const isInflation = opp.category === 'Economics'
-
-  let instruction = ''
-  let directive = ''
-
-  if (city && isTempBand) {
-    const bandMatch = title.match(/(\d+[–\-]\d+)°/)
-    const band = bandMatch ? bandMatch[1] + '°' : subtitle
-    const stat = /minimum|low/i.test(title) ? 'low' : 'high'
-    instruction = `Foretell expects the ${stat} in ${city} to reach ${band}.`
-    directive = `Bet on the ${band} band (click YES)`
-
-  } else if (city && isGteBand) {
-    const tempMatch = (title + subtitle).match(/(>?\d+)°/)
-    const temp = tempMatch ? tempMatch[1] + '°' : subtitle
-    const stat = /minimum|low/i.test(title) ? 'low' : 'high'
-    instruction = `Foretell expects the ${stat} in ${city} to stay at or above ${temp}.`
-    directive = side === 'YES' ? `Bet on the ≥${temp} band (click YES)` : `Bet on the <${temp} band (click NO)`
-
-  } else if (city && isLteBand) {
-    const tempMatch = (title + subtitle).match(/(\d+)°/)
-    const temp = tempMatch ? tempMatch[1] + '°' : subtitle
-    const stat = /minimum|low/i.test(title) ? 'low' : 'high'
-    instruction = `Foretell expects the ${stat} in ${city} to stay at or below ${temp}.`
-    directive = side === 'YES' ? `Bet on the ≤${temp} band (click YES)` : `Bet on the >${temp} band (click NO)`
-
-  } else if (city && !isTempBand) {
-    // Weather, no band match — use subtitle
-    const outcome = side === 'YES' ? subtitle : noSubtitle
-    instruction = `Foretell forecasts: ${outcome || title}.`
-    directive = `Bet on ${outcome || 'this outcome'} (click ${side})`
-
-  } else if (isWinner && side === 'NO') {
-    // NO on winner market = backing the named losing side
-    const who = noSubtitle.replace(/^NOT:\s*/i, '').trim() || noSubtitle
-    instruction = `Foretell favours ${who || 'this team'} to win.`
-    directive = `Back ${who || 'them'} · click NO  (NO = ${who || 'they'} win)`
-
-  } else if (isWinner && side === 'YES') {
-    const who = subtitle.trim()
-    instruction = `Foretell favours ${who || 'this outcome'}.`
-    directive = `Back ${who || 'YES outcome'} (click YES)`
-
-  } else if (isPriceBand) {
-    const priceMatch = (title + subtitle).match(/\$([\d,]+)/)
-    const price = priceMatch ? '$' + priceMatch[1] : subtitle
-    const isAbove = /or above|or higher/i.test(title + subtitle)
-    instruction = `Foretell expects the price to be ${isAbove ? 'at or above' : 'at or below'} ${price}.`
-    directive = `Bet on the ${isAbove ? '≥' : '≤'}${price} band (click ${side})`
-
-  } else if (isInflation) {
-    // Use subtitle which contains the threshold
-    const outcome = side === 'YES' ? subtitle : noSubtitle
-    instruction = `Foretell expects this economic reading to land at: ${outcome || subtitle}.`
-    directive = `Bet on "${outcome || subtitle}" (click ${side})`
-
-  } else {
-    // Generic fallback
-    const outcome = side === 'YES' ? (subtitle || title) : (noSubtitle || 'NO outcome')
-    instruction = `Foretell recommends the ${side} side on this market.`
-    directive = `Click ${side} — profit if: ${outcome}`
+    if (side === 'YES' && (isTempBand || sub)) {
+      return {
+        why: `Foretell expects the ${stat}${cityStr} to land in this range.`,
+        how: `Bet on the ${sub || winOutcome} band — click YES`,
+        howColor: 'yes',
+      }
+    }
+    if (side === 'YES' && isAbove) {
+      return {
+        why: `Foretell expects the ${stat}${cityStr} to be at or above this threshold.`,
+        how: `Bet on "${sub}" — click YES`,
+        howColor: 'yes',
+      }
+    }
+    if (side === 'YES' && isBelow) {
+      return {
+        why: `Foretell expects the ${stat}${cityStr} to stay at or below this threshold.`,
+        how: `Bet on "${sub}" — click YES`,
+        howColor: 'yes',
+      }
+    }
+    if (side === 'NO' && noSub) {
+      return {
+        why: `Foretell expects the ${stat}${cityStr} to land in this range.`,
+        how: `Bet on the ${noSub} band — click YES on that row`,
+        howColor: 'yes',
+      }
+    }
+    // NO side, band — the NO means "NOT the subtitle band"
+    return {
+      why: `Foretell expects the ${stat}${cityStr} NOT to land in "${sub}".`,
+      how: `Click NO on the "${sub}" row`,
+      howColor: 'no',
+    }
   }
 
-  return { instruction, directive }
+  // ── SPORTS / WINNER bets ──
+  if (cat === 'Sports') {
+    const isWinner = /winner|wins|win the/i.test(title)
+    const isSpread = /spread|by over|by at least/i.test(title)
+    const isTotal  = /total|points|over|under/i.test(title)
+
+    if (isWinner) {
+      if (side === 'YES') {
+        // YES = backing the subtitle team/player
+        return {
+          why: `Foretell expects ${sub || 'this team'} to win.`,
+          how: `Back ${sub || 'YES outcome'} — click YES`,
+          howColor: 'yes',
+        }
+      } else {
+        // NO on winner = backing noSubtitle (the other team)
+        const backing = noSub || sub
+        return {
+          why: `Foretell expects ${backing} to win.`,
+          how: `Back ${backing} — click NO  (NO = ${backing} wins)`,
+          howColor: 'no',
+        }
+      }
+    }
+
+    if (isSpread || isTotal) {
+      // Spread/total bets — side directly meaningful
+      const outcome = side === 'YES' ? (sub || 'YES') : (noSub || 'NO')
+      const verb = isSpread ? 'cover the spread' : (sub.toLowerCase().includes('over') ? 'go over' : 'stay under')
+      return {
+        why: `Foretell expects ${verb}: ${outcome}.`,
+        how: `Click ${side} — profit if: ${outcome}`,
+        howColor: side === 'YES' ? 'yes' : 'no',
+      }
+    }
+
+    // Generic sports
+    const outcome = side === 'YES' ? sub : noSub
+    return {
+      why: `Foretell recommends the ${side} side.`,
+      how: `Click ${side} — profit if: ${outcome || side}`,
+      howColor: side === 'YES' ? 'yes' : 'no',
+    }
+  }
+
+  // ── ECONOMICS bets ──
+  if (cat === 'Economics') {
+    const outcome = side === 'YES' ? sub : noSub
+    return {
+      why: `Foretell expects this reading to come in at: ${outcome || sub}.`,
+      how: `Bet on "${outcome || sub}" — click ${side}`,
+      howColor: side === 'YES' ? 'yes' : 'no',
+    }
+  }
+
+  // ── COMMODITIES / MARKETS bets ──
+  if (cat === 'Commodities' || cat === 'Markets') {
+    const outcome = side === 'YES' ? sub : noSub
+    const isAbove = /above|or above|or higher/i.test(outcome + title)
+    const isBelow = /below|or below|or lower/i.test(outcome + title)
+    const dir = isAbove ? 'at or above' : isBelow ? 'at or below' : 'at'
+    return {
+      why: `Foretell expects the price to be ${dir}: ${outcome || sub}.`,
+      how: `Bet on "${outcome || sub}" — click ${side}`,
+      howColor: side === 'YES' ? 'yes' : 'no',
+    }
+  }
+
+  // ── GENERAL fallback ──
+  const outcome = side === 'YES' ? sub : noSub
+  return {
+    why: `Foretell recommends the ${side} side on this market.`,
+    how: `Click ${side} — profit if: ${outcome || side}`,
+    howColor: side === 'YES' ? 'yes' : 'no',
+  }
 }
 
-// ── PLAIN TITLE (strip [City] prefix, simplify) ──
+// ── PLAIN TITLE (strip Kalshi question framing) ──────────────────────
 function plainTitle(opp: Opportunity): string {
-  const title = opp.title || opp.ticker
-  const city = title.match(/^\[([^\]]+)\]/)
-  const stat = /maximum|max/i.test(title) ? 'Max temperature'
-             : /minimum|min/i.test(title) ? 'Min temperature'
-             : null
+  const t = opp.title || opp.ticker
+  const cityMatch = t.match(/^\[([^\]]+)\]/)
+  const city = cityMatch ? cityMatch[1] : null
 
-  if (city && stat) {
-    // "Max temperature · Miami · Mar 10"
-    const dateMatch = title.match(/(\w{3}\s+\d{1,2},?\s*\d{4}|\w{3}\s+\d{1,2})/)
+  // Weather: "Max temperature · Miami · Mar 10, 2026"
+  if (city) {
+    const stat = /maximum|max/i.test(t) ? 'Max temperature'
+               : /minimum|min/i.test(t)  ? 'Min temperature'
+               : /high temp/i.test(t)    ? 'High temperature'
+               : /low temp/i.test(t)     ? 'Low temperature'
+               : /snow/i.test(t)         ? 'Snowfall'
+               : /rain/i.test(t)         ? 'Rainfall'
+               : 'Temperature'
+    const dateMatch = t.match(/(\w{3}\s+\d{1,2}(?:,?\s*\d{4})?)/)
     const date = dateMatch ? dateMatch[0] : ''
-    return `${stat} · ${city[1]}${date ? ' · ' + date : ''}`
+    return `${stat} · ${city}${date ? ' · ' + date : ''}`
   }
-  if (city && !stat) {
-    // "[Miami] Weather ..." → "Weather · Miami"
-    return title.replace(/^\[[^\]]+\]\s*/, '') + ` · ${city[1]}`
-  }
-  return title
+  return t
 }
 
+// ── SCORE BAR ────────────────────────────────────────────────────────
+// The score is Foretell's composite edge score (max ~90).
+// Higher = stronger opportunity. Shown as a thin bar + number.
 function scoreBar(score: number): string {
   const pct = Math.min(100, (score / 90) * 100)
-  const color = pct > 68 ? 'var(--lime)' : pct > 42 ? 'var(--teal)' : 'var(--warm-mid)'
+  const barColor = pct > 68 ? 'var(--lime)' : pct > 42 ? 'var(--teal)' : 'var(--warm-mid)'
   const textColor = pct > 68 ? 'var(--pos)' : pct > 42 ? 'var(--teal-dark)' : 'var(--warm-mid)'
-  return `<div class="score-bar-wrap">
-    <div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%;background:${color};"></div></div>
-    <span class="score-val" style="color:${textColor};">${score.toFixed(1)}</span>
+  return `<div class="score-row">
+    <span class="score-label">Foretell score</span>
+    <div class="score-bar-track"><div class="score-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
+    <span class="score-val" style="color:${textColor};">${score.toFixed(1)}<span class="score-max">/90</span></span>
   </div>
-  <div class="score-bar-legend">Foretell confidence score &nbsp;·&nbsp; 0 = none &nbsp;·&nbsp; 90 = max</div>`
+  <div class="score-legend">Higher = stronger edge · EV + price band + liquidity + spread + horizon</div>`
 }
 
 function formatClose(days: number): string {
@@ -230,21 +285,21 @@ function formatClose(days: number): string {
 }
 
 function renderCard(opp: Opportunity, rank: number): string {
-  const cs    = catStyle(opp.category)
+  const cs = catStyle(opp.category)
   const winProb = Math.round(opp.impliedProb * 100)
   const evColor = opp.expectedValue > 0 ? 'var(--pos)' : 'var(--neg)'
   const evDisplay = (opp.expectedValue > 0 ? '+' : '') + opp.expectedValue.toFixed(1) + '¢'
   const entryDollars = (opp.entryPrice / 100).toFixed(2)
   const isHighConf = winProb >= 80
-  const volDisplay = opp.volume24h >= 1000000 ? (opp.volume24h/1000000).toFixed(1)+'M'
-                   : opp.volume24h >= 1000    ? (opp.volume24h/1000).toFixed(0)+'k'
+  const volDisplay = opp.volume24h >= 1000000 ? (opp.volume24h / 1000000).toFixed(1) + 'M'
+                   : opp.volume24h >= 1000    ? (opp.volume24h / 1000).toFixed(0) + 'k'
                    : opp.volume24h.toString()
 
-  const { instruction, directive } = buildBetInstruction(opp)
-  const displayTitle = plainTitle(opp)
+  const { why, how, howColor } = buildBetInstruction(opp)
+  const title = plainTitle(opp)
   const searchStr = opp.searchText || opp.title
 
-  // City badge for weather
+  // City badge for weather cards
   const cityMatch = opp.title.match(/^\[([^\]]+)\]/)
   const cityBadge = cityMatch ? `<span class="card-city">📍 ${cityMatch[1]}</span>` : ''
 
@@ -252,6 +307,8 @@ function renderCard(opp: Opportunity, rank: number): string {
   <div class="opp-card" data-id="${opp.ticker}">
     <div class="card-rank">${rank}</div>
     <div class="card-body">
+
+      <!-- Header row: category · side · city · conf · closes -->
       <div class="card-header">
         <span class="card-cat" style="color:${cs.text};border-color:${cs.border};background:${cs.bg};">${opp.category}</span>
         <span class="card-side ${opp.side === 'YES' ? 'side-yes' : 'side-no'}">${opp.side}</span>
@@ -260,13 +317,19 @@ function renderCard(opp: Opportunity, rank: number): string {
         <span class="card-close">${formatClose(opp.daysToClose)}</span>
       </div>
 
-      <h3 class="card-title">${displayTitle}</h3>
+      <!-- Plain-English title -->
+      <h3 class="card-title">${title}</h3>
 
-      <div class="bet-instruction-box">
-        <p class="bet-why">${instruction}</p>
-        <div class="bet-directive">→ ${directive}</div>
+      <!-- ★ BET INSTRUCTION — the most important element ── -->
+      <div class="bet-box">
+        <p class="bet-why">${why}</p>
+        <div class="bet-how bet-how--${howColor}">
+          <span class="bet-arrow">→</span>
+          <span class="bet-how-text">${how}</span>
+        </div>
       </div>
 
+      <!-- Stats row -->
       <div class="card-metrics">
         <div class="metric">
           <span class="metric-label">Entry</span>
@@ -290,14 +353,18 @@ function renderCard(opp: Opportunity, rank: number): string {
         </div>
       </div>
 
+      <!-- Risk rating -->
       ${renderRisk(opp)}
 
+      <!-- Rationale + score bar -->
       <div class="card-footer">
         <p class="card-rationale">${opp.rationale}</p>
         ${scoreBar(opp.edgeScore)}
       </div>
-    </div>
 
+    </div><!-- /card-body -->
+
+    <!-- Actions footer — belongs to THIS card, separated visually -->
     <div class="card-actions">
       <button class="card-copy-btn" data-copy="${searchStr}">
         <div class="copy-inner">
@@ -322,12 +389,13 @@ function renderCard(opp: Opportunity, rank: number): string {
         <span class="placed-confirm">Placed ✓</span>
       </button>
     </div>
+
   </div>`
 }
 
 function renderSkeleton(): string {
   return Array.from({ length: 6 }, (_, i) => `
-    <div class="opp-card" style="opacity:${1 - i*0.12}">
+    <div class="opp-card" style="opacity:${1 - i * 0.12}">
       <div class="card-body">
         <div style="display:flex;gap:8px;margin-bottom:14px;">
           <div class="sk-line" style="width:70px;height:20px;"></div>
@@ -336,7 +404,7 @@ function renderSkeleton(): string {
         <div class="sk-line" style="width:88%;height:18px;margin-bottom:8px;"></div>
         <div class="sk-line" style="width:65%;height:14px;margin-bottom:20px;"></div>
         <div style="display:flex;gap:1px;">
-          ${Array.from({length:5}, () => '<div class="sk-line" style="flex:1;height:38px;"></div>').join('')}
+          ${Array.from({ length: 5 }, () => '<div class="sk-line" style="flex:1;height:38px;"></div>').join('')}
         </div>
       </div>
     </div>`).join('')
@@ -359,7 +427,7 @@ function renderEmpty(): string {
   </div>`
 }
 
-// ── STATE ──
+// ── STATE ────────────────────────────────────────────────────────────
 let allOpps: Opportunity[] = []
 let activeCategory = 'All'
 let sortBy: 'score' | 'return' | 'prob' | 'close' = 'score'
@@ -382,7 +450,6 @@ function updateGrid() {
   const filtered = getFiltered()
   if (filtered.length === 0) { grid.innerHTML = renderEmpty(); return }
   grid.innerHTML = filtered.map((o, i) => renderCard(o, i + 1)).join('')
-  // Re-apply placed state
   placedSet.forEach(ticker => {
     const card = grid.querySelector(`[data-id="${ticker}"]`)
     if (card) card.classList.add('is-placed')
@@ -412,17 +479,16 @@ function updateStats(opps: Opportunity[]) {
   const avgProb   = opps.length ? opps.reduce((s, o) => s + o.impliedProb, 0) / opps.length : 0
   const avgReturn = opps.length ? opps.reduce((s, o) => s + o.potentialReturn, 0) / opps.length : 0
   const set = (id: string, v: string) => { const e = document.getElementById(id); if (e) e.textContent = v }
-  set('stat-count', opps.length.toString())
-  set('stat-prob', `${Math.round(avgProb * 100)}%`)
-  set('stat-return', `${avgReturn.toFixed(1)}%`)
+  set('stat-count',   opps.length.toString())
+  set('stat-prob',    `${Math.round(avgProb * 100)}%`)
+  set('stat-return',  `${avgReturn.toFixed(1)}%`)
   set('stat-updated', new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }))
 }
 
-// ── EVENT DELEGATION ──
+// ── EVENT DELEGATION ─────────────────────────────────────────────────
 document.addEventListener('click', (e) => {
   const target = e.target as Element
 
-  // Copy button
   const copyBtn = target.closest('.card-copy-btn') as HTMLElement | null
   if (copyBtn) {
     const text = copyBtn.dataset.copy || ''
@@ -433,7 +499,6 @@ document.addEventListener('click', (e) => {
     return
   }
 
-  // Placed button
   const placedBtn = target.closest('.card-placed-btn') as HTMLElement | null
   if (placedBtn) {
     const ticker = placedBtn.dataset.ticker || ''
@@ -449,7 +514,7 @@ document.addEventListener('click', (e) => {
   }
 })
 
-// ── LOAD ──
+// ── LOAD ─────────────────────────────────────────────────────────────
 async function loadOpportunities() {
   const grid = document.getElementById('opp-grid')
   if (!grid) return
@@ -477,7 +542,7 @@ async function loadOpportunities() {
   }
 }
 
-// ── SHELL ──
+// ── SHELL ─────────────────────────────────────────────────────────────
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div class="page">
   <header>
@@ -552,9 +617,12 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <p>Data sourced from the <a href="https://kalshi.com" target="_blank" rel="noopener">Kalshi</a> public API. Not financial advice.</p>
       </div>
       <div class="footer-right">
-        <p>Score = EV (40) + price band (25) + liquidity (20) + spread (10) + horizon (5)<br>
-        YES/NO = which side to buy · <strong>click NO on winner markets = backing the named outcome</strong><br>
-        Risk 1–10: 1 = very safe · 10 = very risky</p>
+        <p>
+          <strong>YES pill</strong> = buy YES on Kalshi &nbsp;·&nbsp; <strong>NO pill</strong> = buy NO on Kalshi<br>
+          On winner markets: clicking NO means you're backing the named team/player<br>
+          <strong>Foretell score</strong> = composite edge 0–90 (EV + price band + liquidity + spread + horizon)<br>
+          <strong>Risk 1–10</strong> = 1 very safe · 10 very risky
+        </p>
       </div>
     </div>
   </footer>
