@@ -1,6 +1,6 @@
 // api/opportunities.js
 // Vercel Serverless Function to fetch Kalshi markets
-// VERSION 2.2 - Fixed API URL, volume filter, EV calculation, RR filter
+// VERSION 2.3 - Correct API URL + migrated to _dollars fixed-point fields (March 12 2026 breaking change)
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -14,16 +14,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    // FIX 1: Correct API base URL (api.elections.kalshi.com was the old/elections-only domain)
-    const KALSHI_API_BASE = 'https://trading-api.kalshi.com/trade-api/v2';
+    // FIXED: api.elections.kalshi.com is the correct PUBLIC endpoint for ALL markets
+    // trading-api.kalshi.com requires auth; elections subdomain is public/no-key
+    const KALSHI_API_BASE = 'https://api.elections.kalshi.com/trade-api/v2';
 
     const response = await fetch(`${KALSHI_API_BASE}/markets?limit=1000&status=open`, {
-      headers: { 'Accept': 'application/json' }
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Foretell/2.3'
+      }
     });
 
     if (!response.ok) {
       const body = await response.text();
-      throw new Error(`Kalshi API returned ${response.status}: ${body.slice(0, 200)}`);
+      throw new Error(`Kalshi API returned ${response.status}: ${body.slice(0, 300)}`);
     }
 
     const data = await response.json();
@@ -37,7 +41,7 @@ export default async function handler(req, res) {
       count: opportunities.length,
       totalMarkets: markets.length,
       timestamp: new Date().toISOString(),
-      version: '2.2-fixed'
+      version: '2.3-dollars-fields'
     });
 
   } catch (error) {
@@ -49,76 +53,87 @@ export default async function handler(req, res) {
   }
 }
 
+// Parse price from either new _dollars string fields or legacy cent integer fields.
+// Kalshi removed legacy integer cent fields on March 12, 2026 — prefer _dollars.
+function parsePrice(dollarsField, centsField) {
+  if (dollarsField !== undefined && dollarsField !== null) {
+    return parseFloat(dollarsField);
+  }
+  if (centsField !== undefined && centsField !== null) {
+    return centsField / 100;
+  }
+  return null;
+}
+
 function processMarkets(markets) {
   const now = new Date();
 
   return markets
     .filter(m => {
-      if (!m.yes_bid || !m.yes_ask) return false;
-      if (m.yes_bid > m.yes_ask) return false;
-      if (m.yes_bid === 0 && m.yes_ask === 0) return false;
-      const spread = (m.yes_ask - m.yes_bid) / 100;
+      const yesBid = parsePrice(m.yes_bid_dollars, m.yes_bid);
+      const yesAsk = parsePrice(m.yes_ask_dollars, m.yes_ask);
+      if (yesBid === null || yesAsk === null) return false;
+      if (yesBid <= 0 || yesAsk <= 0) return false;
+      if (yesBid > yesAsk) return false;
+      const spread = yesAsk - yesBid;
       if (spread > 0.40) return false;
       return true;
     })
     .map(m => {
-      const yesBid    = m.yes_bid  / 100;
-      const yesAsk    = m.yes_ask  / 100;
-      const noBid     = m.no_bid   ? m.no_bid  / 100 : 1 - yesAsk;
-      const noAsk     = m.no_ask   ? m.no_ask  / 100 : 1 - yesBid;
+      const yesBid = parsePrice(m.yes_bid_dollars, m.yes_bid);
+      const yesAsk = parsePrice(m.yes_ask_dollars, m.yes_ask);
+      const noBid  = parsePrice(m.no_bid_dollars,  m.no_bid)  ?? (1 - yesAsk);
+      const noAsk  = parsePrice(m.no_ask_dollars,  m.no_ask)  ?? (1 - yesBid);
 
-      const midpoint  = (yesBid + yesAsk) / 2;
-      const spread    = yesAsk - yesBid;
+      const midpoint = (yesBid + yesAsk) / 2;
+      const spread   = yesAsk - yesBid;
 
-      const expiryDate    = new Date(m.close_time);
+      const expiryDate    = new Date(m.close_time || m.expiration_time);
       const msToExpiry    = expiryDate - now;
       const expiryDays    = Math.max(0, Math.ceil(msToExpiry / (1000 * 60 * 60 * 24)));
       const hoursToExpiry = Math.max(0, msToExpiry / (1000 * 60 * 60));
 
-      const feeRate    = 0.035;
-      const impliedProb = midpoint;
-      const entryYES   = yesAsk;
-      const entryNO    = noAsk;
+      const feeRate = 0.035;
 
-      const yesEV = (impliedProb * (1 - entryYES)) - ((1 - impliedProb) * entryYES) - (entryYES * feeRate);
-      const noEV  = ((1 - impliedProb) * (1 - entryNO)) - (impliedProb * entryNO) - (entryNO * feeRate);
+      // EV for buying YES at ask
+      const yesEV = (midpoint * (1 - yesAsk)) - ((1 - midpoint) * yesAsk) - (yesAsk * feeRate);
+      // EV for buying NO at ask
+      const noEV  = ((1 - midpoint) * (1 - noAsk)) - (midpoint * noAsk) - (noAsk * feeRate);
 
-      const bestSide  = noEV > yesEV ? 'NO'    : 'YES';
-      const bestEV    = noEV > yesEV ? noEV    : yesEV;
-      const bestPrice = noEV > yesEV ? entryNO : entryYES;
+      const bestSide  = noEV > yesEV ? 'NO'  : 'YES';
+      const bestEV    = noEV > yesEV ? noEV  : yesEV;
+      const bestPrice = noEV > yesEV ? noAsk : yesAsk;
 
       const volume = m.volume || 0;
 
       return {
-        id:            m.ticker,
-        title:         m.title ? m.title.replace(/^yes\s+/i, '').trim() : m.ticker,
-        category:      categorizeMarket(m.ticker, m.title || ''),
-        probability:   impliedProb,
-        yesPrice:      entryYES,
-        noPrice:       entryNO,
+        id:             m.ticker,
+        title:          (m.title || m.ticker).replace(/^yes\s+/i, '').trim(),
+        category:       categorizeMarket(m.ticker, m.title || ''),
+        probability:    midpoint,
+        yesPrice:       yesAsk,
+        noPrice:        noAsk,
         bestSide,
         bestPrice,
-        payout:        bestPrice > 0 ? (1 / bestPrice) : 0,
         volume,
         spread,
-        spreadQuality: Math.max(0, 1 - spread / 0.40),
         expiryDays,
         hoursToExpiry,
-        expectedValue: bestEV,
+        expectedValue:  bestEV,
         yesEV,
         noEV,
-        edge:          impliedProb - entryYES,
+        edge:           midpoint - yesAsk,
         riskRewardRatio: bestPrice / (1 - bestPrice),
-        maxWin:        1 - bestPrice,
-        maxLoss:       bestPrice,
-        riskScore:     calculateRiskScore(m, spread, impliedProb, bestPrice, hoursToExpiry),
-        marketUrl:     `https://kalshi.com/markets/${m.ticker}`
+        maxWin:         1 - bestPrice,
+        maxLoss:        bestPrice,
+        riskScore:      calculateRiskScore(m, spread, midpoint, bestPrice, hoursToExpiry),
+        marketUrl:      `https://kalshi.com/markets/${m.ticker}`
       };
     })
     .filter(opp => {
       if (opp.expectedValue < 0.005) return false;
-      if (opp.volume < 500) return false;
-      if (opp.hoursToExpiry < 0.5) return false;
+      if (opp.volume < 500)          return false;
+      if (opp.hoursToExpiry < 0.5)   return false;
       return true;
     })
     .sort((a, b) => {
@@ -197,10 +212,10 @@ function calculateRiskScore(market, spread, probability, entryPrice, hoursToExpi
   else if (rr > 4) risk += 2;
   else if (rr > 2) risk += 1;
 
-  if (hoursToExpiry >= 6 && hoursToExpiry <= 48)    risk -= 1.5;
-  else if (hoursToExpiry < 1)                        risk += 1;
-  else if (hoursToExpiry >= 1 && hoursToExpiry < 6)  risk += 2;
-  else if (hoursToExpiry > 168)                      risk += 1;
+  if (hoursToExpiry >= 6 && hoursToExpiry <= 48)   risk -= 1.5;
+  else if (hoursToExpiry < 1)                       risk += 1;
+  else if (hoursToExpiry >= 1 && hoursToExpiry < 6) risk += 2;
+  else if (hoursToExpiry > 168)                     risk += 1;
 
   if (t.includes('attend') || t.includes('sotu') || t.includes('appear')) risk += 2;
   if ((t.includes('match') || t.includes('game')) && entryPrice > 0.75)   risk += 1.5;
